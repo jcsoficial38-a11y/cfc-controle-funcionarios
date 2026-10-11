@@ -181,12 +181,14 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
           {/* Telefone e Gênero */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label htmlFor="employee-telefone-input" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Telefone / WhatsApp *
               </label>
               <div className="relative">
-                <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
                 <input
+                  id="employee-telefone-input"
+                  name="telefone"
                   type="tel"
                   inputMode="numeric"
                   autoComplete="tel"
