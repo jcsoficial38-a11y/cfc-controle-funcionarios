@@ -7,7 +7,8 @@ import {
   formatBRDate,
   formatWhatsAppUrl,
 } from '../utils/vacationCalculator';
-import { MessageCircle, Clock, AlertTriangle, AlertOctagon, CheckCircle2, ChevronRight, Briefcase } from 'lucide-react';
+import { Clock, AlertTriangle, AlertOctagon, CheckCircle2, ChevronRight, Briefcase } from 'lucide-react';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 interface EmployeeCardProps {
   employee: Employee;
@@ -200,7 +201,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
           title={`Abrir WhatsApp com ${employee.apelido || employee.nome}`}
           className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors shadow-2xs"
         >
-          <MessageCircle className="w-3.5 h-3.5" />
+          <WhatsAppIcon className="w-3.5 h-3.5" />
           <span className="font-mono tabular-nums">{employee.telefone}</span>
         </a>
 

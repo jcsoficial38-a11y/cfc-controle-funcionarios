@@ -274,7 +274,7 @@ export function formatWhatsAppUrl(telefone: string, nomeOuApelido: string): stri
   const digitsOnly = telefone.replace(/\D/g, '');
   if (!digitsOnly) return '#';
   const cleanNumber = digitsOnly.startsWith('55') ? digitsOnly : `55${digitsOnly}`;
-  const text = `Olá ${nomeOuApelido}, tudo bem? Gostaria de falar sobre sua escala e férias no StaffControl Pro.`;
+  const text = `Olá ${nomeOuApelido}, tudo bem? Gostaria de conversar com você sobre sua escala e férias no CFC (Controle Funcionário Completo).`;
   return `https://wa.me/${cleanNumber}?text=${encodeURIComponent(text)}`;
 }
 

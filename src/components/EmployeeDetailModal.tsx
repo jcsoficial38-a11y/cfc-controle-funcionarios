@@ -10,7 +10,6 @@ import {
 } from '../utils/vacationCalculator';
 import {
   X,
-  MessageCircle,
   Calendar,
   Clock,
   AlertTriangle,
@@ -24,6 +23,7 @@ import {
   Award,
   Edit2,
 } from 'lucide-react';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 interface EmployeeDetailModalProps {
   isOpen: boolean;
@@ -96,7 +96,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-medium transition-colors shadow-xs"
                 >
-                  <MessageCircle className="w-3.5 h-3.5" />
+                  <WhatsAppIcon className="w-4 h-4" />
                   <span>Conversar no WhatsApp ({employee.telefone})</span>
                 </a>
 

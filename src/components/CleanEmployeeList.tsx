@@ -5,7 +5,8 @@ import {
   calculateVacationSummary,
   formatWhatsAppUrl,
 } from '../utils/vacationCalculator';
-import { MessageCircle, AlertTriangle, AlertOctagon, ChevronRight, Edit3 } from 'lucide-react';
+import { AlertTriangle, AlertOctagon, ChevronRight, Edit3 } from 'lucide-react';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 interface CleanEmployeeListProps {
   employees: Employee[];
@@ -78,9 +79,9 @@ export const CleanEmployeeList: React.FC<CleanEmployeeListProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   title={`WhatsApp de ${emp.apelido || emp.nome}`}
-                  className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors"
+                  className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 transition-colors"
                 >
-                  <MessageCircle className="w-4 h-4" />
+                  <WhatsAppIcon className="w-4 h-4" />
                 </a>
                 <button
                   type="button"
@@ -143,7 +144,7 @@ export const CleanEmployeeList: React.FC<CleanEmployeeListProps> = ({
                   title={`Conversar no WhatsApp com ${emp.apelido || emp.nome}`}
                   className="p-2 sm:px-3 sm:py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors inline-flex items-center gap-1.5 text-xs font-medium"
                 >
-                  <MessageCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <WhatsAppIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <span className="hidden lg:inline font-mono tabular-nums">{emp.telefone}</span>
                 </a>
 

@@ -6,7 +6,8 @@ import {
   formatBRDate,
   formatWhatsAppUrl,
 } from '../utils/vacationCalculator';
-import { MessageCircle, AlertTriangle, AlertOctagon, CheckCircle2, Clock, Edit2, Calendar } from 'lucide-react';
+import { AlertTriangle, AlertOctagon, CheckCircle2, Clock, Edit2, Calendar } from 'lucide-react';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 interface EmployeeTableProps {
   employees: Employee[];
@@ -87,7 +88,7 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
                     onClick={(e) => e.stopPropagation()}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-xs font-mono tabular-nums transition-colors"
                   >
-                    <MessageCircle className="w-3.5 h-3.5" />
+                    <WhatsAppIcon className="w-3.5 h-3.5" />
                     <span>{emp.telefone}</span>
                   </a>
                 </td>
