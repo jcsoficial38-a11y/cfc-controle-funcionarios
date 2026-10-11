@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { ManagerProfile } from '../types';
-import { X, ShieldCheck, KeyRound, Check, AlertCircle, Palette, Sun, Moon, Fingerprint, Scan, User, Lock, Sparkles } from 'lucide-react';
+import {
+  X,
+  ShieldCheck,
+  KeyRound,
+  Check,
+  AlertCircle,
+  Palette,
+  Sun,
+  Moon,
+  Fingerprint,
+  Scan,
+  User,
+  Lock,
+  HelpCircle,
+  Share2,
+} from 'lucide-react';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 interface ManagerSettingsModalProps {
   isOpen: boolean;
@@ -10,6 +26,15 @@ interface ManagerSettingsModalProps {
   onToggleDarkMode: () => void;
   onUpdateManager: (updated: ManagerProfile) => void;
 }
+
+const PRESET_SECURITY_QUESTIONS = [
+  'Qual o nome da sua primeira escola?',
+  'Qual o nome do seu primeiro animal de estimação?',
+  'Em qual cidade seus pais se conheceram?',
+  'Qual é o nome de solteira da sua mãe?',
+  'Qual foi o seu primeiro emprego?',
+  'Outra (personalizada)',
+];
 
 export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
   isOpen,
@@ -22,13 +47,34 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
   const [nome, setNome] = useState(manager?.nome || '');
   const [usuario, setUsuario] = useState(manager?.usuario || 'admin');
   const [cargo, setCargo] = useState(manager?.cargo || 'Gestor de Pessoal / RH');
-  const [senhaAtual, setSenhaAtual] = useState('');
-  const [novaSenha, setNovaSenha] = useState('');
-  const [tipoBiometria, setTipoBiometria] = useState<'touch_id' | 'face_id'>(manager?.tipoBiometria || 'touch_id');
-  const [biometriaAtiva, setBiometriaAtiva] = useState<boolean>(manager?.biometriaAtiva ?? true);
-  const [accentColor, setAccentColor] = useState<'indigo' | 'emerald' | 'blue' | 'amber' | 'violet' | 'rose'>(
-    manager?.accentColor || 'indigo'
+
+  // PIN de 4 dígitos
+  const [pin, setPin] = useState(manager?.pin || '');
+  const [confirmPin, setConfirmPin] = useState(manager?.pin || '');
+
+  // Pergunta e Resposta de Segurança
+  const [selectedQuestion, setSelectedQuestion] = useState(() => {
+    if (!manager?.perguntaSeguranca) return PRESET_SECURITY_QUESTIONS[0];
+    if (PRESET_SECURITY_QUESTIONS.includes(manager.perguntaSeguranca)) {
+      return manager.perguntaSeguranca;
+    }
+    return 'Outra (personalizada)';
+  });
+  const [customQuestion, setCustomQuestion] = useState(() => {
+    if (manager?.perguntaSeguranca && !PRESET_SECURITY_QUESTIONS.includes(manager.perguntaSeguranca)) {
+      return manager.perguntaSeguranca;
+    }
+    return '';
+  });
+  const [respostaSeguranca, setRespostaSeguranca] = useState(manager?.respostaSeguranca || '');
+
+  const [tipoBiometria, setTipoBiometria] = useState<'touch_id' | 'face_id'>(
+    manager?.tipoBiometria || 'touch_id'
   );
+  const [biometriaAtiva, setBiometriaAtiva] = useState<boolean>(manager?.biometriaAtiva ?? true);
+  const [accentColor, setAccentColor] = useState<
+    'indigo' | 'emerald' | 'blue' | 'amber' | 'violet' | 'rose'
+  >(manager?.accentColor || 'indigo');
   const [feedback, setFeedback] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
 
   useEffect(() => {
@@ -36,6 +82,18 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
       setNome(manager.nome);
       setUsuario(manager.usuario);
       setCargo(manager.cargo);
+      setPin(manager.pin || '');
+      setConfirmPin(manager.pin || '');
+      if (manager.perguntaSeguranca) {
+        if (PRESET_SECURITY_QUESTIONS.includes(manager.perguntaSeguranca)) {
+          setSelectedQuestion(manager.perguntaSeguranca);
+          setCustomQuestion('');
+        } else {
+          setSelectedQuestion('Outra (personalizada)');
+          setCustomQuestion(manager.perguntaSeguranca);
+        }
+      }
+      setRespostaSeguranca(manager.respostaSeguranca || '');
       setTipoBiometria(manager.tipoBiometria || 'touch_id');
       setBiometriaAtiva(manager.biometriaAtiva ?? true);
       setAccentColor(manager.accentColor || 'indigo');
@@ -43,6 +101,14 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
   }, [manager, isOpen]);
 
   if (!isOpen) return null;
+
+  // Compartilhar aplicativo via WhatsApp
+  const handleShareWhatsApp = () => {
+    const appUrl = typeof window !== 'undefined' ? window.location.href : 'https://cfc-app.vercel.app';
+    const message = `Olá! Conheça o CFC (Controle Funcionário Completo), o aplicativo ideal para gestão de equipe, prazos de experiência e controle de férias CLT:\n\n${appUrl}`;
+    const shareUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(shareUrl, '_blank', 'noopener,noreferrer');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,64 +119,83 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
       return;
     }
 
-    // Se for primeiro cadastro do gestor
-    if (!manager) {
-      if (!novaSenha.trim()) {
-        setFeedback({ tipo: 'erro', texto: 'Defina uma senha de acesso para o gestor.' });
-        return;
-      }
-    } else {
-      // Se já existia e está alterando a senha
-      if (novaSenha.trim()) {
-        if (senhaAtual !== manager.senha && manager.senha) {
-          setFeedback({ tipo: 'erro', texto: 'A senha atual informada está incorreta.' });
-          return;
-        }
-        if (novaSenha.trim().length < 3) {
-          setFeedback({ tipo: 'erro', texto: 'A nova senha deve ter pelo menos 3 caracteres.' });
-          return;
-        }
-      }
+    // Validação do PIN de 4 dígitos
+    const cleanPin = pin.trim();
+    const cleanConfirm = confirmPin.trim();
+
+    if (!cleanPin) {
+      setFeedback({ tipo: 'erro', texto: 'Defina um PIN de 4 dígitos para segurança do gestor.' });
+      return;
+    }
+
+    if (!/^\d{4}$/.test(cleanPin)) {
+      setFeedback({ tipo: 'erro', texto: 'O PIN deve conter exatamente 4 dígitos numéricos (ex: 1234).' });
+      return;
+    }
+
+    if (cleanPin !== cleanConfirm) {
+      setFeedback({ tipo: 'erro', texto: 'A confirmação do PIN não confere com o PIN digitado.' });
+      return;
+    }
+
+    // Pergunta e Resposta de Segurança
+    const finalQuestion =
+      selectedQuestion === 'Outra (personalizada)'
+        ? customQuestion.trim()
+        : selectedQuestion.trim();
+
+    if (!finalQuestion) {
+      setFeedback({ tipo: 'erro', texto: 'Defina uma Pergunta de Segurança para recuperação de senha.' });
+      return;
+    }
+
+    if (!respostaSeguranca.trim()) {
+      setFeedback({ tipo: 'erro', texto: 'Defina a Resposta de Segurança para poder recuperar seu PIN.' });
+      return;
     }
 
     const updated: ManagerProfile = {
       nome: nome.trim(),
       usuario: usuario.trim().toLowerCase(),
       cargo: cargo.trim() || 'Gestor RH',
-      senha: novaSenha.trim() ? novaSenha.trim() : (manager?.senha || '123'),
+      senha: cleanPin, // retrocompatibilidade com senha
+      pin: cleanPin,
+      perguntaSeguranca: finalQuestion,
+      respostaSeguranca: respostaSeguranca.trim(),
       biometriaAtiva,
       tipoBiometria,
       accentColor,
     };
 
     onUpdateManager(updated);
-    setFeedback({ tipo: 'sucesso', texto: 'Perfil e configurações salvos com sucesso!' });
+    setFeedback({ tipo: 'sucesso', texto: 'PIN, Pergunta de Segurança e Perfil salvos com sucesso!' });
     setTimeout(() => {
       onClose();
-    }, 800);
+    }, 700);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-6">
         {/* Cabeçalho */}
-        <div className="px-6 py-4.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shadow-xs shrink-0">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                {manager ? 'Perfil do Gestor & Configurações' : 'Cadastro de Perfil do Gestor'}
+              <h2 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
+                Perfil do Gestor & Segurança
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Personalização de cores, tema, senha e biometria
+                PIN de 4 dígitos, Pergunta de Recuperação e Compartilhamento
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
+            aria-label="Fechar"
             className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -118,7 +203,27 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
         </div>
 
         {/* Formulário */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          {/* Botão de Compartilhar no Topo do Perfil */}
+          <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 block truncate">
+                Compartilhar Aplicativo
+              </span>
+              <span className="text-[11px] text-emerald-700 dark:text-emerald-400 block leading-tight">
+                Envie o link do CFC para outros gestores ou colegas via WhatsApp
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleShareWhatsApp}
+              className="px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-transform active:scale-95 cursor-pointer shrink-0"
+            >
+              <WhatsAppIcon className="w-4 h-4 fill-white" />
+              <span>Compartilhar</span>
+            </button>
+          </div>
+
           {/* Dados Pessoais */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -137,7 +242,7 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Nome de Usuário *
@@ -169,53 +274,123 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Troca / Definição de Senha */}
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-2.5">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
-              <KeyRound className="w-3.5 h-3.5 text-slate-500" />
-              <span>{manager ? 'Alteração de Senha (Opcional)' : 'Definição de Senha de Acesso *'}</span>
+          {/* 1. SEÇÃO DE SEGURANÇA: CRIAÇÃO DE PIN (4 DÍGITOS) */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-950 dark:text-indigo-200">
+              <KeyRound className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Senha de Acesso: PIN Numérico (4 Dígitos)</span>
             </div>
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-tight">
+              O PIN será exigido na tela de bloqueio sempre que você recarregar a página ou abrir o aplicativo.
+            </p>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              {manager && (
-                <div>
-                  <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">
-                    Senha Atual
-                  </label>
-                  <input
-                    type="password"
-                    value={senhaAtual}
-                    onChange={(e) => setSenhaAtual(e.target.value)}
-                    placeholder="Confirme a atual"
-                    className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500"
-                  />
-                </div>
-              )}
-
-              <div className={!manager ? 'col-span-2' : ''}>
-                <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">
-                  {manager ? 'Nova Senha' : 'Senha de Acesso *'}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Criar PIN (4 dígitos) *
                 </label>
                 <input
                   type="password"
-                  value={novaSenha}
-                  onChange={(e) => setNovaSenha(e.target.value)}
-                  placeholder={manager ? 'Deixe em branco p/ manter' : 'Digite a senha'}
-                  className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500"
+                  inputMode="numeric"
+                  maxLength={4}
+                  pattern="\d{4}"
+                  required
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="••••"
+                  className="w-full px-3 py-2 text-center text-base tracking-widest font-mono font-bold bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Confirmar PIN *
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  pattern="\d{4}"
+                  required
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="••••"
+                  className="w-full px-3 py-2 text-center text-base tracking-widest font-mono font-bold bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500"
                 />
               </div>
             </div>
           </div>
 
-          {/* Biometria de Segurança */}
+          {/* 2. SEÇÃO DE RECUPERAÇÃO: PERGUNTA E RESPOSTA DE SEGURANÇA */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950 dark:text-amber-200">
+              <HelpCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span>Recuperação de Acesso ("Esqueci minha senha")</span>
+            </div>
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-tight">
+              Caso você esqueça o seu PIN, esta pergunta e resposta permitirão desbloquear ou redefinir seu acesso.
+            </p>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Pergunta de Segurança *
+              </label>
+              <select
+                value={selectedQuestion}
+                onChange={(e) => setSelectedQuestion(e.target.value)}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500"
+              >
+                {PRESET_SECURITY_QUESTIONS.map((q) => (
+                  <option key={q} value={q}>
+                    {q}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedQuestion === 'Outra (personalizada)' && (
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Digite sua pergunta personalizada *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={customQuestion}
+                  onChange={(e) => setCustomQuestion(e.target.value)}
+                  placeholder="Ex: Qual o apelido do meu irmão?"
+                  className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Resposta de Segurança *
+              </label>
+              <input
+                type="text"
+                required
+                value={respostaSeguranca}
+                onChange={(e) => setRespostaSeguranca(e.target.value)}
+                placeholder="Ex: Colégio Santos Dumont"
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500"
+              />
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Dica: Resposta não diferencia maiúsculas de minúsculas ao recuperar.
+              </span>
+            </div>
+          </div>
+
+          {/* 3. BIOMETRIA DE SEGURANÇA */}
           <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-2.5">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-                  Biometria de Segurança
+                  Autenticação Biométrica / Face ID
                 </span>
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Ativar ou alternar o método biométrico simulado
+                  Desbloqueio rápido por sensor de digital ou reconhecimento facial
                 </span>
               </div>
               <button
@@ -243,7 +418,7 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
                   }`}
                 >
                   <Fingerprint className="w-4 h-4" />
-                  <span>TouchID (Digital)</span>
+                  <span>TouchID / Digital</span>
                 </button>
                 <button
                   type="button"
@@ -255,13 +430,13 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
                   }`}
                 >
                   <Scan className="w-4 h-4" />
-                  <span>FaceID (Facial)</span>
+                  <span>FaceID / Facial</span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* Personalizar Cores Principais do Aplicativo */}
+          {/* 4. PERSONALIZAÇÃO DE CORES */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
@@ -298,7 +473,7 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Alternar Modo Claro e Escuro */}
+          {/* 5. MODO CLARO / ESCURO */}
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <div>
               <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
@@ -341,7 +516,7 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
             </div>
           )}
 
-          {/* Botões */}
+          {/* Botões de Ação */}
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
             <button
               type="button"
@@ -355,7 +530,7 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
               className="px-5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <Check className="w-4 h-4" />
-              <span>Salvar Perfil e Configurações</span>
+              <span>Salvar Perfil e PIN</span>
             </button>
           </div>
         </form>

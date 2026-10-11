@@ -32,7 +32,10 @@ export type VacationStatus = 'quitado' | 'em_andamento' | 'em_dia' | 'alerta' | 
 export interface ManagerProfile {
   nome: string;
   usuario: string;
-  senha: string;
+  senha?: string;
+  pin?: string; // PIN de 4 dígitos
+  perguntaSeguranca?: string; // Pergunta para recuperação
+  respostaSeguranca?: string; // Resposta para recuperação
   cargo: string;
   biometriaAtiva: boolean;
   tipoBiometria: 'touch_id' | 'face_id';

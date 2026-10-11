@@ -9,6 +9,7 @@ import {
 import { CleanWelcomeScreen } from './components/CleanWelcomeScreen';
 import { CFCHeader } from './components/CFCHeader';
 import { CleanEmployeeList } from './components/CleanEmployeeList';
+import { CleanLockScreen } from './components/CleanLockScreen';
 import { ManagerSettingsModal } from './components/ManagerSettingsModal';
 import { EmployeeModal } from './components/EmployeeModal';
 import { EmployeeDetailModal } from './components/EmployeeDetailModal';
@@ -287,17 +288,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
-      {/* 1. TELA INICIAL SUPER LIMPA (Sem telas de login obrigatórias na entrada) */}
+      {/* TELA DE BLOQUEIO E AUTENTICAÇÃO OBRIGATÓRIA (PIN de 4 dígitos ou Biometria / Face ID) */}
       {!isInApp ? (
-        <CleanWelcomeScreen
-          onEnter={() => setIsInApp(true)}
-          hasManager={Boolean(manager)}
-          managerName={manager ? manager.nome : undefined}
-          accentColor={manager?.accentColor}
+        <CleanLockScreen
+          manager={manager}
+          onUnlock={() => setIsInApp(true)}
+          onUpdateManager={(updated) => setManager(updated)}
+          onOpenSettings={() => setIsManagerSettingsOpen(true)}
         />
       ) : (
         <>
-          {/* 2. CABEÇALHO E LAYOUT PRINCIPAL */}
+          {/* CABEÇALHO E LAYOUT PRINCIPAL */}
           <CFCHeader
             manager={manager}
             darkMode={darkMode}

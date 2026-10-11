@@ -23,7 +23,7 @@ export const ManagerLockScreen: React.FC<ManagerLockScreenProps> = ({
   // Campos para cadastro / edição rápida de gestor
   const [editNome, setEditNome] = useState(manager.nome);
   const [editUsuario, setEditUsuario] = useState(manager.usuario);
-  const [editSenha, setEditSenha] = useState(manager.senha);
+  const [editSenha, setEditSenha] = useState(manager.senha || manager.pin || '');
   const [editCargo, setEditCargo] = useState(manager.cargo);
   const [editBiometriaAtiva, setEditBiometriaAtiva] = useState(manager.biometriaAtiva);
   const [editTipoBiometria, setEditTipoBiometria] = useState<'touch_id' | 'face_id'>(manager.tipoBiometria);
