@@ -1,0 +1,6 @@
+{
+  "name": "StaffControl Pro - Gestão de Funcionários e Férias",
+  "description": "Sistema completo para controle de funcionários, cálculo automático de períodos aquisitivos de férias CLT, alertas de vencimento, biometria simulada e integração com WhatsApp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
