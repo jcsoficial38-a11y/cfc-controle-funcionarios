@@ -98,24 +98,26 @@ export const CleanEmployeeList: React.FC<CleanEmployeeListProps> = ({
             {/* Metadados, Badges de Férias e Status */}
             <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap shrink-0 pl-11 sm:pl-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                {/* Alerta de Férias Discreto */}
+                {/* Alerta de Férias a Vencer nos Próximos 60 Dias (Badge Vermelho Destacado com Ícone de Atenção) */}
                 {!isDemitido && vacSummary.temFériasAlerta && (
                   <div
-                    title={`Férias a vencer em ${periodoUrgente?.diasParaVencer ?? 60} dias`}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 text-[11px] font-semibold"
+                    title={`Atenção: Férias a vencer em ${vacSummary.diasParaVencerAlerta ?? 60} dias (prazo concessivo CLT)`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-[11px] font-bold shadow-xs"
                   >
-                    <AlertTriangle className="w-3 h-3 text-amber-600" />
-                    <span>Vence em {periodoUrgente?.diasParaVencer ?? 60}d</span>
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                    <span>
+                      Vence em {vacSummary.diasParaVencerAlerta ?? 60} {vacSummary.diasParaVencerAlerta === 1 ? 'dia' : 'dias'}
+                    </span>
                   </div>
                 )}
 
-                {/* Férias Vencidas */}
-                {vacSummary.temFériasVencidas && (
+                {/* Férias Vencidas (Prazo Legal CLT Expirado) */}
+                {!isDemitido && vacSummary.temFériasVencidas && (
                   <div
                     title="Férias com período concessivo vencido (prazo legal CLT expirado)"
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-900/60 text-rose-700 dark:text-rose-400 text-[11px] font-bold"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-700 dark:bg-red-800 border border-red-800 text-white text-[11px] font-black shadow-xs"
                   >
-                    <AlertOctagon className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                    <AlertOctagon className="w-3.5 h-3.5 text-white shrink-0" />
                     <span>Férias Vencidas</span>
                   </div>
                 )}

@@ -47,7 +47,8 @@ export interface CalculatedVacationPeriod {
   periodIndex: number;
   periodoAquisitivoInicio: string; // 'YYYY-MM-DD'
   periodoAquisitivoFim: string; // 'YYYY-MM-DD'
-  periodoConcessivoLimite: string; // 'YYYY-MM-DD' (1 ano após o fim do aquisitivo)
+  periodoConcessivoInicio?: string; // 'YYYY-MM-DD' (início do período concessivo)
+  periodoConcessivoLimite: string; // 'YYYY-MM-DD' (1 ano após o fim do aquisitivo - data limite CLT)
   diasDireitoTotal: number; // 30
   diasGozados: number;
   diasVendidos: number;
@@ -63,5 +64,7 @@ export interface EmployeeVacationSummary {
   temFériasVencidas: boolean;
   temFériasAlerta: boolean; // vence em <= 60 dias
   menorDiasParaVencer: number | null; // dias restantes para o período mais urgente com saldo pendente
+  diasParaVencerAlerta?: number | null; // dias restantes específicos para o período em alerta (<= 60 dias)
+  periodoAlertaMaisUrgente?: CalculatedVacationPeriod;
   statusGeral: VacationStatus;
 }

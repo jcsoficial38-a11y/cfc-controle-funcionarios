@@ -1,7 +1,6 @@
 import React from 'react';
 import { ManagerProfile } from '../types';
 import { Plus, Sun, Moon, Lock, Settings } from 'lucide-react';
-import { PWAInstallButton } from './PWAInstallButton';
 
 interface CFCHeaderProps {
   manager: ManagerProfile | null;
@@ -57,9 +56,6 @@ export const CFCHeader: React.FC<CFCHeaderProps> = ({
 
         {/* Canto Superior Direito: Botão Adicionar Funcionário e Acesso ao Painel do Perfil/Configurações do Gestor */}
         <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
-          {/* Botão de Instalação PWA */}
-          <PWAInstallButton />
-
           {/* Alternar Tema */}
           <button
             type="button"

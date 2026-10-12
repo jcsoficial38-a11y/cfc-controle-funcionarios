@@ -154,9 +154,10 @@ export function calculateVacationSummary(employee: Employee, refDate: Date = new
     }
 
     const fimAquisitivo = addDays(addYears(admissao, periodIndex + 1), -1);
-    const limiteConcessivo = addYears(fimAquisitivo, 1);
+    const inicioConcessivo = addYears(admissao, periodIndex + 1);
+    const limiteConcessivo = addDays(addYears(admissao, periodIndex + 2), -1);
 
-    const isPeriodoAtualAquisitivo = cutoffDate < fimAquisitivo;
+    const isPeriodoAtualAquisitivo = cutoffDate <= fimAquisitivo;
 
     // Registros específicos desse período
     const records = (employee.vacationRecords || []).filter(r => r.periodIndex === periodIndex);
@@ -184,6 +185,7 @@ export function calculateVacationSummary(employee: Employee, refDate: Date = new
       periodIndex,
       periodoAquisitivoInicio: formatISODate(inicioAquisitivo),
       periodoAquisitivoFim: formatISODate(fimAquisitivo),
+      periodoConcessivoInicio: formatISODate(inicioConcessivo),
       periodoConcessivoLimite: formatISODate(limiteConcessivo),
       diasDireitoTotal: 30,
       diasGozados,
@@ -201,10 +203,21 @@ export function calculateVacationSummary(employee: Employee, refDate: Date = new
     if (periodIndex > 30) break;
   }
 
-  // Identifica alertas gerais para o funcionário
+  // Identifica períodos pendentes (com direito já adquirido e saldo > 0)
   const periodosPendentes = periodos.filter(p => !p.isPeriodoAtualAquisitivo && p.saldoRestante > 0);
+  
+  // Férias vencidas: qualquer período cujo prazo limite do concessivo já expirou (diasParaVencer <= 0)
   const temFériasVencidas = periodosPendentes.some(p => p.status === 'vencido' || p.diasParaVencer <= 0);
-  const temFériasAlerta = periodosPendentes.some(p => p.status === 'alerta');
+  
+  // Férias em alerta (<= 60 dias): período cujo prazo limite vence em 60 dias ou menos (e ainda não venceu)
+  const periodosEmAlerta = periodosPendentes.filter(p => p.status === 'alerta' || (p.diasParaVencer > 0 && p.diasParaVencer <= 60));
+  const temFériasAlerta = periodosEmAlerta.length > 0;
+
+  // Período de alerta mais urgente (com menor diasParaVencer > 0)
+  const periodoAlertaMaisUrgente = periodosEmAlerta.length > 0
+    ? [...periodosEmAlerta].sort((a, b) => a.diasParaVencer - b.diasParaVencer)[0]
+    : undefined;
+  const diasParaVencerAlerta = periodoAlertaMaisUrgente ? periodoAlertaMaisUrgente.diasParaVencer : null;
 
   let menorDiasParaVencer: number | null = null;
   if (periodosPendentes.length > 0) {
@@ -228,6 +241,8 @@ export function calculateVacationSummary(employee: Employee, refDate: Date = new
     temFériasVencidas,
     temFériasAlerta,
     menorDiasParaVencer,
+    diasParaVencerAlerta,
+    periodoAlertaMaisUrgente,
     statusGeral,
   };
 }
@@ -250,7 +265,7 @@ export function isVacationPeriodOverdue(period: CalculatedVacationPeriod, refDat
 export function temFeriasVencidas(employee: Employee, refDate: Date = new Date()): boolean {
   if (!employee.dataAdmissao) return false;
   const summary = calculateVacationSummary(employee, refDate);
-  return summary.periodos.some(p => isVacationPeriodOverdue(p, refDate));
+  return summary.temFériasVencidas;
 }
 
 /**
@@ -260,11 +275,7 @@ export function temFeriasVencidas(employee: Employee, refDate: Date = new Date()
 export function temFeriasAlerta(employee: Employee, refDate: Date = new Date()): boolean {
   if (!employee.dataAdmissao) return false;
   const summary = calculateVacationSummary(employee, refDate);
-  return summary.periodos.some(p => {
-    if (p.isPeriodoAtualAquisitivo || p.saldoRestante <= 0) return false;
-    if (isVacationPeriodOverdue(p, refDate)) return false;
-    return p.diasParaVencer > 0 && p.diasParaVencer <= 60;
-  });
+  return summary.temFériasAlerta;
 }
 
 /**

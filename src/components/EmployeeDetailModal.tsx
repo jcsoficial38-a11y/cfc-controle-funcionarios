@@ -176,13 +176,15 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                 </div>
               )}
 
-              {vacationSummary.temFériasAlerta && !vacationSummary.temFériasVencidas && (
-                <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              {vacationSummary.temFériasAlerta && (
+                <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-900 text-rose-800 dark:text-rose-200 flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                   <div className="text-xs">
-                    <span className="font-bold block">Alerta de Vencimento Próximo (≤ 60 dias)</span>
-                    <p className="mt-0.5 text-amber-700 dark:text-amber-300">
-                      Existem férias prestes a vencer o período concessivo nos próximos 60 dias. Agende o gozo com antecedência.
+                    <span className="font-bold block">
+                      Atenção: Férias em Alerta (Faltam {vacationSummary.diasParaVencerAlerta ?? 60} {vacationSummary.diasParaVencerAlerta === 1 ? 'dia' : 'dias'} para o limite)
+                    </span>
+                    <p className="mt-0.5 text-rose-700 dark:text-rose-300">
+                      Existem férias prestes a vencer o período concessivo legal nos próximos 60 dias. Agende o gozo com antecedência para evitar o pagamento em dobro conforme a CLT.
                     </p>
                   </div>
                 </div>
@@ -211,9 +213,9 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                         key={period.periodIndex}
                         className={`rounded-xl p-4.5 border transition-all ${
                           isVencido
-                            ? 'border-rose-300 dark:border-rose-900 bg-rose-50/20 dark:bg-rose-950/10'
+                            ? 'border-red-400 dark:border-red-900 bg-red-50/30 dark:bg-red-950/20'
                             : isAlerta
-                            ? 'border-amber-300 dark:border-amber-900 bg-amber-50/20 dark:bg-amber-950/10'
+                            ? 'border-rose-300 dark:border-rose-900 bg-rose-50/25 dark:bg-rose-950/15'
                             : isQuitado
                             ? 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/10 dark:bg-emerald-950/10'
                             : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40'
@@ -222,7 +224,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                         {/* Linha superior do período */}
                         <div className="flex items-start justify-between gap-2 flex-wrap">
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-sm text-slate-900 dark:text-white">
                                 {period.periodIndex + 1}º Período Aquisitivo
                               </span>
@@ -237,13 +239,13 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                                 </span>
                               )}
                               {isAlerta && (
-                                <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 flex items-center gap-1">
-                                  <AlertTriangle className="w-3 h-3" /> A Vencer em Breve
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 flex items-center gap-1 border border-rose-300 dark:border-rose-800">
+                                  <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400" /> Vence em {period.diasParaVencer} {period.diasParaVencer === 1 ? 'dia' : 'dias'}
                                 </span>
                               )}
                               {isVencido && (
-                                <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 flex items-center gap-1">
-                                  <AlertOctagon className="w-3 h-3" /> Férias Vencidas
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-red-700 text-white flex items-center gap-1">
+                                  <AlertOctagon className="w-3 h-3 text-white" /> Férias Vencidas
                                 </span>
                               )}
                             </div>
@@ -252,6 +254,12 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                               Aquisitivo: {formatBRDate(period.periodoAquisitivoInicio)} até{' '}
                               {formatBRDate(period.periodoAquisitivoFim)}
                             </p>
+                            {period.periodoConcessivoInicio && (
+                              <p className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">
+                                Concessivo: {formatBRDate(period.periodoConcessivoInicio)} até{' '}
+                                {formatBRDate(period.periodoConcessivoLimite)}
+                              </p>
+                            )}
                           </div>
 
                           {/* Contador regressivo dinâmico */}
@@ -263,9 +271,9 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                               <div
                                 className={`text-xs font-mono font-bold mt-0.5 ${
                                   isVencido
-                                    ? 'text-rose-600 dark:text-rose-400'
+                                    ? 'text-red-600 dark:text-red-400 font-black'
                                     : isAlerta
-                                    ? 'text-amber-600 dark:text-amber-400'
+                                    ? 'text-rose-600 dark:text-rose-400'
                                     : 'text-emerald-600 dark:text-emerald-400'
                                 }`}
                               >
