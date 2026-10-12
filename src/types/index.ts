@@ -53,7 +53,12 @@ export interface CalculatedVacationPeriod {
   diasGozados: number;
   diasVendidos: number;
   saldoRestante: number;
-  diasParaVencer: number; // negativo se vencido
+  diasParaVencer: number; // dias até o limite concessivo (negativo se vencido)
+  diasParaCompletarAquisitivo?: number; // dias até completar os 12 meses de contrato (período aquisitivo)
+  emAlertaAquisitivo?: boolean; // faltam <= 60 dias para completar o período aquisitivo
+  emAlertaConcessivo?: boolean; // faltam <= 60 dias para atingir o limite concessivo (dobra de férias)
+  diasAlertaMarco?: number; // menor número de dias para o marco relevante em alerta (<= 60)
+  tipoAlerta?: 'aquisitivo' | 'concessivo';
   status: VacationStatus;
   isPeriodoAtualAquisitivo: boolean;
   records: VacationTakeRecord[];
@@ -62,9 +67,10 @@ export interface CalculatedVacationPeriod {
 export interface EmployeeVacationSummary {
   periodos: CalculatedVacationPeriod[];
   temFériasVencidas: boolean;
-  temFériasAlerta: boolean; // vence em <= 60 dias
+  temFériasAlerta: boolean; // <= 60 dias para completar aquisitivo OU <= 60 dias para o limite concessivo
   menorDiasParaVencer: number | null; // dias restantes para o período mais urgente com saldo pendente
-  diasParaVencerAlerta?: number | null; // dias restantes específicos para o período em alerta (<= 60 dias)
+  diasParaVencerAlerta?: number | null; // dias restantes específicos para o alerta (<= 60 dias)
+  tipoAlerta?: 'aquisitivo' | 'concessivo'; // se o alerta é de completar aquisitivo ou limite concessivo
   periodoAlertaMaisUrgente?: CalculatedVacationPeriod;
   statusGeral: VacationStatus;
 }

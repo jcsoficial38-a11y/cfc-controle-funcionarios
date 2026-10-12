@@ -167,15 +167,33 @@ export function calculateVacationSummary(employee: Employee, refDate: Date = new
     const saldoRestante = Math.max(0, 30 - totalUtilizado);
 
     const diasParaVencer = diffInDays(refDate, limiteConcessivo);
+    const diasParaCompletarAquisitivo = diffInDays(refDate, fimAquisitivo);
+
+    // Alerta de 60 dias conforme regras solicitadas:
+    // 1) Faltando 60 dias ou menos para completar o período aquisitivo (12 meses de contrato).
+    // 2) Faltando 60 dias ou menos para atingir a data limite do período concessivo (dobra de férias).
+    const emAlertaAquisitivo = isPeriodoAtualAquisitivo && diasParaCompletarAquisitivo >= 0 && diasParaCompletarAquisitivo <= 60;
+    const emAlertaConcessivo = !isPeriodoAtualAquisitivo && saldoRestante > 0 && diasParaVencer > 0 && diasParaVencer <= 60;
+
+    let diasAlertaMarco: number | undefined;
+    let tipoAlerta: 'aquisitivo' | 'concessivo' | undefined;
+
+    if (emAlertaConcessivo) {
+      diasAlertaMarco = diasParaVencer;
+      tipoAlerta = 'concessivo';
+    } else if (emAlertaAquisitivo) {
+      diasAlertaMarco = diasParaCompletarAquisitivo;
+      tipoAlerta = 'aquisitivo';
+    }
 
     let status: VacationStatus;
     if (saldoRestante === 0) {
       status = 'quitado';
     } else if (isPeriodoAtualAquisitivo) {
-      status = 'em_andamento';
+      status = emAlertaAquisitivo ? 'alerta' : 'em_andamento';
     } else if (diasParaVencer <= 0) {
       status = 'vencido';
-    } else if (diasParaVencer <= 60) {
+    } else if (emAlertaConcessivo) {
       status = 'alerta';
     } else {
       status = 'em_dia';
@@ -192,6 +210,11 @@ export function calculateVacationSummary(employee: Employee, refDate: Date = new
       diasVendidos,
       saldoRestante,
       diasParaVencer,
+      diasParaCompletarAquisitivo,
+      emAlertaAquisitivo,
+      emAlertaConcessivo,
+      diasAlertaMarco,
+      tipoAlerta,
       status,
       isPeriodoAtualAquisitivo,
       records,
@@ -203,26 +226,32 @@ export function calculateVacationSummary(employee: Employee, refDate: Date = new
     if (periodIndex > 30) break;
   }
 
-  // Identifica períodos pendentes (com direito já adquirido e saldo > 0)
+  // Identifica períodos pendentes com direito já adquirido e saldo > 0
   const periodosPendentes = periodos.filter(p => !p.isPeriodoAtualAquisitivo && p.saldoRestante > 0);
   
   // Férias vencidas: qualquer período cujo prazo limite do concessivo já expirou (diasParaVencer <= 0)
   const temFériasVencidas = periodosPendentes.some(p => p.status === 'vencido' || p.diasParaVencer <= 0);
   
-  // Férias em alerta (<= 60 dias): período cujo prazo limite vence em 60 dias ou menos (e ainda não venceu)
-  const periodosEmAlerta = periodosPendentes.filter(p => p.status === 'alerta' || (p.diasParaVencer > 0 && p.diasParaVencer <= 60));
+  // Férias em alerta (<= 60 dias):
+  // Considera tanto:
+  // - Faltando 60 dias ou menos para completar o período aquisitivo (12 meses de contrato)
+  // - Faltando 60 dias ou menos para atingir a data limite do período concessivo (dobra de férias)
+  const periodosEmAlerta = periodos.filter(p => p.emAlertaConcessivo || p.emAlertaAquisitivo || p.status === 'alerta');
   const temFériasAlerta = periodosEmAlerta.length > 0;
 
-  // Período de alerta mais urgente (com menor diasParaVencer > 0)
+  // Período de alerta mais urgente (com menor diasAlertaMarco)
   const periodoAlertaMaisUrgente = periodosEmAlerta.length > 0
-    ? [...periodosEmAlerta].sort((a, b) => a.diasParaVencer - b.diasParaVencer)[0]
+    ? [...periodosEmAlerta].sort((a, b) => (a.diasAlertaMarco ?? 999) - (b.diasAlertaMarco ?? 999))[0]
     : undefined;
-  const diasParaVencerAlerta = periodoAlertaMaisUrgente ? periodoAlertaMaisUrgente.diasParaVencer : null;
+  const diasParaVencerAlerta = periodoAlertaMaisUrgente ? (periodoAlertaMaisUrgente.diasAlertaMarco ?? null) : null;
+  const tipoAlerta = periodoAlertaMaisUrgente ? periodoAlertaMaisUrgente.tipoAlerta : undefined;
 
   let menorDiasParaVencer: number | null = null;
   if (periodosPendentes.length > 0) {
     const ordenados = [...periodosPendentes].sort((a, b) => a.diasParaVencer - b.diasParaVencer);
     menorDiasParaVencer = ordenados[0].diasParaVencer;
+  } else if (temFériasAlerta && diasParaVencerAlerta !== null) {
+    menorDiasParaVencer = diasParaVencerAlerta;
   }
 
   let statusGeral: VacationStatus = 'quitado';
@@ -242,6 +271,7 @@ export function calculateVacationSummary(employee: Employee, refDate: Date = new
     temFériasAlerta,
     menorDiasParaVencer,
     diasParaVencerAlerta,
+    tipoAlerta,
     periodoAlertaMaisUrgente,
     statusGeral,
   };

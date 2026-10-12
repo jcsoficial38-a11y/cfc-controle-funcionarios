@@ -181,10 +181,12 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                   <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                   <div className="text-xs">
                     <span className="font-bold block">
-                      Atenção: Férias em Alerta (Faltam {vacationSummary.diasParaVencerAlerta ?? 60} {vacationSummary.diasParaVencerAlerta === 1 ? 'dia' : 'dias'} para o limite)
+                      Atenção: Vence em {vacationSummary.diasParaVencerAlerta ?? 60} {vacationSummary.diasParaVencerAlerta === 1 ? 'dia' : 'dias'}
                     </span>
                     <p className="mt-0.5 text-rose-700 dark:text-rose-300">
-                      Existem férias prestes a vencer o período concessivo legal nos próximos 60 dias. Agende o gozo com antecedência para evitar o pagamento em dobro conforme a CLT.
+                      {vacationSummary.tipoAlerta === 'aquisitivo'
+                        ? `Faltam apenas ${vacationSummary.diasParaVencerAlerta ?? 60} dias para completar os 12 meses de contrato (período aquisitivo). Prepare a programação para o início da concessão das férias.`
+                        : `Faltam ${vacationSummary.diasParaVencerAlerta ?? 60} dias para atingir a data limite do período concessivo (dobra de férias CLT). Agende o gozo com antecedência para evitar penalidades.`}
                     </p>
                   </div>
                 </div>
@@ -240,7 +242,14 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                               )}
                               {isAlerta && (
                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 flex items-center gap-1 border border-rose-300 dark:border-rose-800">
-                                  <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400" /> Vence em {period.diasParaVencer} {period.diasParaVencer === 1 ? 'dia' : 'dias'}
+                                  <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400" />{' '}
+                                  {period.tipoAlerta === 'aquisitivo'
+                                    ? `Atenção: Vence em ${period.diasAlertaMarco ?? period.diasParaCompletarAquisitivo} ${
+                                        (period.diasAlertaMarco ?? period.diasParaCompletarAquisitivo) === 1 ? 'dia' : 'dias'
+                                      }`
+                                    : `Atenção: Vence em ${period.diasAlertaMarco ?? period.diasParaVencer} ${
+                                        (period.diasAlertaMarco ?? period.diasParaVencer) === 1 ? 'dia' : 'dias'
+                                      }`}
                                 </span>
                               )}
                               {isVencido && (

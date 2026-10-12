@@ -98,15 +98,19 @@ export const CleanEmployeeList: React.FC<CleanEmployeeListProps> = ({
             {/* Metadados, Badges de Férias e Status */}
             <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap shrink-0 pl-11 sm:pl-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                {/* Alerta de Férias a Vencer nos Próximos 60 Dias (Badge Vermelho Destacado com Ícone de Atenção) */}
+                {/* Alerta de Férias a Vencer nos Próximos 60 Dias (Badge Vermelho Destacado com Ícone de Atenção Obrigatório) */}
                 {!isDemitido && vacSummary.temFériasAlerta && (
                   <div
-                    title={`Atenção: Férias a vencer em ${vacSummary.diasParaVencerAlerta ?? 60} dias (prazo concessivo CLT)`}
+                    title={
+                      vacSummary.tipoAlerta === 'aquisitivo'
+                        ? `Atenção: Vence em ${vacSummary.diasParaVencerAlerta ?? 60} dias (completa 12 meses do período aquisitivo)`
+                        : `Atenção: Vence em ${vacSummary.diasParaVencerAlerta ?? 60} dias (data limite do período concessivo CLT)`
+                    }
                     className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-[11px] font-bold shadow-xs"
                   >
                     <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
                     <span>
-                      Vence em {vacSummary.diasParaVencerAlerta ?? 60} {vacSummary.diasParaVencerAlerta === 1 ? 'dia' : 'dias'}
+                      Atenção: Vence em {vacSummary.diasParaVencerAlerta ?? 60} {vacSummary.diasParaVencerAlerta === 1 ? 'dia' : 'dias'}
                     </span>
                   </div>
                 )}

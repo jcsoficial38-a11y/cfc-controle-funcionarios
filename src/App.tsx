@@ -464,7 +464,7 @@ export default function App() {
                   }`}
                 >
                   <AlertTriangle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  <span>Alerta 60d ({counters.alertaFerias})</span>
+                  <span>Férias a Vencer / Alerta 60 Dias ({counters.alertaFerias})</span>
                 </button>
                 <button
                   type="button"
@@ -509,7 +509,7 @@ export default function App() {
                     }`}
                   >
                     {statusFilter === 'vencidas' && '🚨 Férias Vencidas (Prazo Limite CLT Expirado e Não Gozadas)'}
-                    {statusFilter === 'alerta' && '⚠️ Férias em Alerta (Faltam 60 dias ou menos para vencer o prazo legal)'}
+                    {statusFilter === 'alerta' && '⚠️ Férias a Vencer / Alerta 60 Dias (Completa 12m aquisitivo ou limite concessivo)'}
                     {statusFilter === 'ativos' && '✓ Funcionários Ativos'}
                     {statusFilter === 'demitidos' && '✗ Contratos Rescindidos'}
                   </span>
