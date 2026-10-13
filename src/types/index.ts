@@ -37,7 +37,9 @@ export interface ManagerProfile {
   perguntaSeguranca?: string; // Pergunta para recuperação
   respostaSeguranca?: string; // Resposta para recuperação
   cargo: string;
-  biometriaAtiva: boolean;
+  biometriaAtiva: boolean; // Ativação nas configurações (padrão desativada)
+  biometriaCadastrada?: boolean; // Se a chave WebAuthn / Passkey já foi criada e registrada
+  credencialBiometricaId?: string; // ID da credencial registrada via WebAuthn
   tipoBiometria: 'touch_id' | 'face_id';
   fotoUrl?: string;
   accentColor?: 'indigo' | 'emerald' | 'blue' | 'amber' | 'violet' | 'rose';

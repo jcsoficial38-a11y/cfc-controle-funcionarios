@@ -17,6 +17,7 @@ import {
   Share2,
 } from 'lucide-react';
 import { WhatsAppIcon } from './WhatsAppIcon';
+import { registerBiometricPasskey, clearBiometricPasskey } from '../utils/security';
 
 interface ManagerSettingsModalProps {
   isOpen: boolean;
@@ -71,7 +72,13 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
   const [tipoBiometria, setTipoBiometria] = useState<'touch_id' | 'face_id'>(
     manager?.tipoBiometria || 'touch_id'
   );
-  const [biometriaAtiva, setBiometriaAtiva] = useState<boolean>(manager?.biometriaAtiva ?? true);
+  const [biometriaAtiva, setBiometriaAtiva] = useState<boolean>(manager?.biometriaAtiva ?? false);
+  const [biometriaCadastrada, setBiometriaCadastrada] = useState<boolean>(
+    manager?.biometriaCadastrada ?? false
+  );
+  const [isRegisteringBiometric, setIsRegisteringBiometric] = useState<boolean>(false);
+  const [biometricFeedback, setBiometricFeedback] = useState<string | null>(null);
+
   const [accentColor, setAccentColor] = useState<
     'indigo' | 'emerald' | 'blue' | 'amber' | 'violet' | 'rose'
   >(manager?.accentColor || 'indigo');
@@ -95,10 +102,80 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
       }
       setRespostaSeguranca(manager.respostaSeguranca || '');
       setTipoBiometria(manager.tipoBiometria || 'touch_id');
-      setBiometriaAtiva(manager.biometriaAtiva ?? true);
+      setBiometriaAtiva(manager.biometriaAtiva ?? false);
+      setBiometriaCadastrada(manager.biometriaCadastrada ?? false);
       setAccentColor(manager.accentColor || 'indigo');
     }
   }, [manager, isOpen]);
+
+  // Função para Cadastrar / Ativar Biometria (executada UMA ÚNICA VEZ)
+  const handleCadastrarBiometria = async () => {
+    setIsRegisteringBiometric(true);
+    setBiometricFeedback(null);
+    try {
+      const result = await registerBiometricPasskey(
+        usuario || 'gestor',
+        nome || 'Gestor Responsável'
+      );
+      setIsRegisteringBiometric(false);
+
+      if (result.success) {
+        setBiometriaCadastrada(true);
+        setBiometriaAtiva(true);
+        setBiometricFeedback('Biometria cadastrada e ativada com sucesso!');
+
+        // Salva imediatamente no perfil para persistir a chave
+        if (manager) {
+          const updatedManager: ManagerProfile = {
+            ...manager,
+            biometriaAtiva: true,
+            biometriaCadastrada: true,
+            credencialBiometricaId: result.credentialId,
+            tipoBiometria,
+          };
+          onUpdateManager(updatedManager);
+        } else {
+          const newManager: ManagerProfile = {
+            nome: nome.trim() || 'Gestor Responsável',
+            usuario: usuario.trim() || 'gestor',
+            cargo: cargo.trim() || 'Diretor de Gente & Gestão',
+            senha: pin || '1234',
+            pin: pin || '1234',
+            perguntaSeguranca: selectedQuestion || 'Qual o nome da sua primeira escola?',
+            respostaSeguranca: respostaSeguranca || '',
+            biometriaAtiva: true,
+            biometriaCadastrada: true,
+            credencialBiometricaId: result.credentialId,
+            tipoBiometria,
+            accentColor,
+          };
+          onUpdateManager(newManager);
+        }
+      } else {
+        setBiometricFeedback(result.error || 'Não foi possível cadastrar a biometria.');
+      }
+    } catch {
+      setIsRegisteringBiometric(false);
+      setBiometricFeedback('Erro ao comunicar com o sensor biométrico.');
+    }
+  };
+
+  // Função para Desativar Biometria
+  const handleDesativarBiometria = () => {
+    setBiometriaAtiva(false);
+    clearBiometricPasskey();
+    setBiometriaCadastrada(false);
+    setBiometricFeedback('Biometria desativada. O acesso agora exigirá apenas o PIN de 4 dígitos.');
+    if (manager) {
+      const updatedManager: ManagerProfile = {
+        ...manager,
+        biometriaAtiva: false,
+        biometriaCadastrada: false,
+        credencialBiometricaId: undefined,
+      };
+      onUpdateManager(updatedManager);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -163,6 +240,8 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
       perguntaSeguranca: finalQuestion,
       respostaSeguranca: respostaSeguranca.trim(),
       biometriaAtiva,
+      biometriaCadastrada,
+      credencialBiometricaId: manager?.credencialBiometricaId,
       tipoBiometria,
       accentColor,
     };
@@ -382,56 +461,104 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
             </div>
           </div>
 
-          {/* 3. BIOMETRIA DE SEGURANÇA */}
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-2.5">
-            <div className="flex items-center justify-between">
+          {/* 3. CADASTRO ÚNICO DE BIOMETRIA (CONFIGURAÇÕES) */}
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-                  Autenticação Biométrica / Face ID
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                  Cadastrar/Ativar Biometria (Passkey / WebAuthn)
                 </span>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Desbloqueio rápido por sensor de digital ou reconhecimento facial
-                </span>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                  Criação única da chave de acesso no dispositivo. Após cadastrada, a tela de bloqueio apenas verifica sua digital sem solicitar nova criação de chave.
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setBiometriaAtiva(!biometriaAtiva)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
-                  biometriaAtiva
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+
+              {/* Status Badge */}
+              <span
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 ${
+                  biometriaCadastrada && biometriaAtiva
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
                     : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
                 }`}
               >
-                {biometriaAtiva ? 'Ativada' : 'Desativada'}
-              </button>
+                {biometriaCadastrada && biometriaAtiva ? 'Cadastrada & Ativa' : 'Desativada'}
+              </span>
             </div>
 
-            {biometriaAtiva && (
-              <div className="grid grid-cols-2 gap-2 pt-1">
+            {/* Ação de Cadastro Único ou Gerenciamento */}
+            {!biometriaCadastrada || !biometriaAtiva ? (
+              <div className="pt-1">
                 <button
                   type="button"
-                  onClick={() => setTipoBiometria('touch_id')}
-                  className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs transition-all cursor-pointer ${
-                    tipoBiometria === 'touch_id'
-                      ? 'border-indigo-600 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 font-semibold shadow-xs'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900'
-                  }`}
+                  onClick={handleCadastrarBiometria}
+                  disabled={isRegisteringBiometric}
+                  className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  <Fingerprint className="w-4 h-4" />
-                  <span>TouchID / Digital</span>
+                  {tipoBiometria === 'face_id' ? (
+                    <Scan className="w-4 h-4" />
+                  ) : (
+                    <Fingerprint className="w-4 h-4" />
+                  )}
+                  <span>
+                    {isRegisteringBiometric
+                      ? 'Criando chave de acesso no sensor...'
+                      : 'Cadastrar/Ativar Biometria'}
+                  </span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setTipoBiometria('face_id')}
-                  className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs transition-all cursor-pointer ${
-                    tipoBiometria === 'face_id'
-                      ? 'border-indigo-600 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 font-semibold shadow-xs'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900'
-                  }`}
-                >
-                  <Scan className="w-4 h-4" />
-                  <span>FaceID / Facial</span>
-                </button>
+                <span className="text-[10px] text-slate-400 mt-1.5 block text-center">
+                  * Executado uma única vez para registrar seu Touch ID, Face ID ou biometria nativa.
+                </span>
+              </div>
+            ) : (
+              <div className="space-y-2 pt-1">
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <span className="font-semibold">
+                      Chave biométrica registrada com sucesso neste dispositivo.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDesativarBiometria}
+                    className="text-[11px] text-rose-600 dark:text-rose-400 hover:underline font-semibold cursor-pointer shrink-0 ml-2"
+                  >
+                    Desativar
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setTipoBiometria('touch_id')}
+                    className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs transition-all cursor-pointer ${
+                      tipoBiometria === 'touch_id'
+                        ? 'border-indigo-600 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 font-semibold shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900'
+                    }`}
+                  >
+                    <Fingerprint className="w-4 h-4" />
+                    <span>TouchID / Digital</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTipoBiometria('face_id')}
+                    className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs transition-all cursor-pointer ${
+                      tipoBiometria === 'face_id'
+                        ? 'border-indigo-600 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 font-semibold shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900'
+                    }`}
+                  >
+                    <Scan className="w-4 h-4" />
+                    <span>FaceID / Facial</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {biometricFeedback && (
+              <div className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50/60 dark:bg-indigo-950/40 p-2 rounded-lg border border-indigo-200/60 dark:border-indigo-900/40">
+                {biometricFeedback}
               </div>
             )}
           </div>

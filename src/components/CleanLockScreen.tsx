@@ -84,12 +84,27 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
   // Autenticação Biométrica / Face ID
   const handleBiometricAuth = async () => {
     if (isScanning) return;
-    setIsScanning(true);
     setErrorMessage(null);
 
+    // VALIDAÇÃO DE CADASTRO:
+    // Se o usuário tocar no ícone de biometria na tela de bloqueio sem ter ativado
+    // a opção nas configurações do app primeiro, exiba a mensagem obrigatória e mantenha bloqueado.
+    const isBiometriaAtiva = Boolean(manager?.biometriaAtiva && manager?.biometriaCadastrada);
+    if (!isBiometriaAtiva) {
+      playSecurityAudio(false);
+      setErrorMessage(
+        'Biometria não cadastrada. Acesse com seu PIN e ative nas configurações do app.'
+      );
+      return;
+    }
+
+    setIsScanning(true);
+
     try {
+      // APÓS O PRIMEIRO CADASTRO: apenas autentica/verifica a chave já salva (get passkey)
       const ok = await authenticateWithBiometrics(
-        `Autenticar Gestor - ${isFaceId ? 'Face ID' : 'Touch ID'}`
+        `Autenticar Gestor - ${isFaceId ? 'Face ID' : 'Touch ID'}`,
+        manager?.credencialBiometricaId
       );
       setIsScanning(false);
       if (ok) {
@@ -111,11 +126,24 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
 
   // Fluxo de recuperação via Biometria
   const handleRecoveryBiometric = async () => {
-    setIsScanning(true);
     setErrorMessage(null);
 
+    const isBiometriaAtiva = Boolean(manager?.biometriaAtiva && manager?.biometriaCadastrada);
+    if (!isBiometriaAtiva) {
+      playSecurityAudio(false);
+      setErrorMessage(
+        'Biometria não cadastrada. Acesse com seu PIN e ative nas configurações do app.'
+      );
+      return;
+    }
+
+    setIsScanning(true);
+
     try {
-      const ok = await authenticateWithBiometrics('Recuperação de Acesso do Gestor');
+      const ok = await authenticateWithBiometrics(
+        'Recuperação de Acesso do Gestor',
+        manager?.credencialBiometricaId
+      );
       setIsScanning(false);
       if (ok) {
         playSecurityAudio(true);
@@ -244,9 +272,9 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
 
             {/* Mensagens de Feedback */}
             {errorMessage && (
-              <div className="mb-4 text-xs text-rose-400 flex items-center justify-center gap-1.5 animate-shake">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMessage}</span>
+              <div className="mb-4 text-xs text-rose-300 bg-rose-950/60 border border-rose-800/80 rounded-xl px-3 py-2 flex items-center justify-center gap-2 text-center max-w-[280px]">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span className="leading-tight">{errorMessage}</span>
               </div>
             )}
 

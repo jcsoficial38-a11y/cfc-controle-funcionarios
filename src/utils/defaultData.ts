@@ -5,7 +5,8 @@ export const INITIAL_MANAGER: ManagerProfile = {
   usuario: 'admin',
   senha: '123',
   cargo: 'Diretor de Gente & Gestão',
-  biometriaAtiva: true,
+  biometriaAtiva: false,
+  biometriaCadastrada: false,
   tipoBiometria: 'touch_id',
 };
 
