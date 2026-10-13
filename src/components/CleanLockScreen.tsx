@@ -12,7 +12,11 @@ import {
   ArrowLeft,
   KeyRound,
 } from 'lucide-react';
-import { authenticateWithBiometrics, playSecurityAudio } from '../utils/security';
+import {
+  authenticateWithBiometrics,
+  playSecurityAudio,
+  hasBiometricPasskeyCreated,
+} from '../utils/security';
 
 interface CleanLockScreenProps {
   manager: ManagerProfile | null;
@@ -86,14 +90,15 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
     if (isScanning) return;
     setErrorMessage(null);
 
-    // VALIDAÇÃO DE CADASTRO:
-    // Se o usuário tocar no ícone de biometria na tela de bloqueio sem ter ativado
-    // a opção nas configurações do app primeiro, exiba a mensagem obrigatória e mantenha bloqueado.
-    const isBiometriaAtiva = Boolean(manager?.biometriaAtiva && manager?.biometriaCadastrada);
-    if (!isBiometriaAtiva) {
+    // SÓ SOLICITAR SE EXISTIR: O botão da digital na tela de bloqueio só deve
+    // acionar o leitor do dispositivo se o aplicativo souber que a chave já foi criada anteriormente
+    const isCadastrada = Boolean(manager?.biometriaAtiva && manager?.biometriaCadastrada);
+    const hasKeyStorage = hasBiometricPasskeyCreated(manager?.credencialBiometricaId);
+
+    if (!isCadastrada || !hasKeyStorage) {
       playSecurityAudio(false);
       setErrorMessage(
-        'Biometria não cadastrada. Acesse com seu PIN e ative nas configurações do app.'
+        'Biometria ainda não cadastrada neste dispositivo. Entre com seu PIN e acesse as configurações para cadastrar.'
       );
       return;
     }
@@ -102,12 +107,13 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
 
     try {
       // APÓS O PRIMEIRO CADASTRO: apenas autentica/verifica a chave já salva (get passkey)
-      const ok = await authenticateWithBiometrics(
+      const res = await authenticateWithBiometrics(
         `Autenticar Gestor - ${isFaceId ? 'Face ID' : 'Touch ID'}`,
         manager?.credencialBiometricaId
       );
       setIsScanning(false);
-      if (ok) {
+
+      if (res.success) {
         playSecurityAudio(true);
         setSuccessMessage('Biometria reconhecida com sucesso!');
         setTimeout(() => {
@@ -115,12 +121,21 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
         }, 300);
       } else {
         playSecurityAudio(false);
-        setErrorMessage('Falha na validação biométrica.');
+        // Exibe mensagem amigável capturada especificamente para ausência de chave
+        if (res.noPasskeyAvailable || (res.error && res.error.includes('ainda não cadastrada'))) {
+          setErrorMessage(
+            'Biometria ainda não cadastrada neste dispositivo. Entre com seu PIN e acesse as configurações para cadastrar.'
+          );
+        } else {
+          setErrorMessage(res.error || 'Falha na validação biométrica.');
+        }
       }
     } catch {
       setIsScanning(false);
       playSecurityAudio(false);
-      setErrorMessage('Erro ao acionar biometria.');
+      setErrorMessage(
+        'Biometria ainda não cadastrada neste dispositivo. Entre com seu PIN e acesse as configurações para cadastrar.'
+      );
     }
   };
 
@@ -128,11 +143,13 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
   const handleRecoveryBiometric = async () => {
     setErrorMessage(null);
 
-    const isBiometriaAtiva = Boolean(manager?.biometriaAtiva && manager?.biometriaCadastrada);
-    if (!isBiometriaAtiva) {
+    const isCadastrada = Boolean(manager?.biometriaAtiva && manager?.biometriaCadastrada);
+    const hasKeyStorage = hasBiometricPasskeyCreated(manager?.credencialBiometricaId);
+
+    if (!isCadastrada || !hasKeyStorage) {
       playSecurityAudio(false);
       setErrorMessage(
-        'Biometria não cadastrada. Acesse com seu PIN e ative nas configurações do app.'
+        'Biometria ainda não cadastrada neste dispositivo. Entre com seu PIN e acesse as configurações para cadastrar.'
       );
       return;
     }
@@ -140,23 +157,32 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
     setIsScanning(true);
 
     try {
-      const ok = await authenticateWithBiometrics(
+      const res = await authenticateWithBiometrics(
         'Recuperação de Acesso do Gestor',
         manager?.credencialBiometricaId
       );
       setIsScanning(false);
-      if (ok) {
+
+      if (res.success) {
         playSecurityAudio(true);
         setSuccessMessage('Identidade confirmada via biometria! Agora defina seu novo PIN.');
         setRecoveryMethod('reset_pin');
       } else {
         playSecurityAudio(false);
-        setErrorMessage('Não foi possível validar biometria para recuperação.');
+        if (res.noPasskeyAvailable || (res.error && res.error.includes('ainda não cadastrada'))) {
+          setErrorMessage(
+            'Biometria ainda não cadastrada neste dispositivo. Entre com seu PIN e acesse as configurações para cadastrar.'
+          );
+        } else {
+          setErrorMessage(res.error || 'Não foi possível validar biometria para recuperação.');
+        }
       }
     } catch {
       setIsScanning(false);
       playSecurityAudio(false);
-      setErrorMessage('Erro no sensor biométrico.');
+      setErrorMessage(
+        'Biometria ainda não cadastrada neste dispositivo. Entre com seu PIN e acesse as configurações para cadastrar.'
+      );
     }
   };
 

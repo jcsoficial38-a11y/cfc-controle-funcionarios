@@ -32,12 +32,18 @@ export async function registerBiometricPasskey(
         const userId = new Uint8Array(16);
         window.crypto.getRandomValues(userId);
 
+        // Determina o domínio do Relying Party (ex: cfc-controle-funcionarios.vercel.app)
+        let rpId: string | undefined = undefined;
+        if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+          rpId = window.location.hostname;
+        }
+
         const createOptions: CredentialCreationOptions = {
           publicKey: {
             challenge,
             rp: {
               name: 'Controle Funcionário Completo (CFC)',
-              id: window.location.hostname || undefined,
+              id: rpId,
             },
             user: {
               id: userId,
@@ -99,14 +105,38 @@ export async function registerBiometricPasskey(
   return { success: true, credentialId: fallbackId };
 }
 
+export function hasBiometricPasskeyCreated(credentialId?: string): boolean {
+  if (credentialId && credentialId.trim().length > 0) return true;
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEY_PASSKEY_ID);
+      return Boolean(stored && stored.trim().length > 0);
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
 /**
  * Autentica/Verifica a biometria na tela de bloqueio usando apenas a chave já cadastrada.
- * NUNCA executa criação de chave (create). Apenas verifica (get) com fallback rápido do sensor.
+ * NUNCA executa criação de chave (create).
+ * Retorna objeto com success, erro amigável se nenhuma chave disponível, ou cancelamento.
  */
 export async function authenticateWithBiometrics(
   _promptTitle: string = 'Autenticação CFC',
   credentialId?: string
-): Promise<boolean> {
+): Promise<{ success: boolean; error?: string; noPasskeyAvailable?: boolean }> {
+  // 1. Verificação prévia: se o aplicativo não tiver chave salva no storage nem no perfil
+  const hasKey = hasBiometricPasskeyCreated(credentialId);
+  if (!hasKey) {
+    return {
+      success: false,
+      noPasskeyAvailable: true,
+      error: 'Biometria ainda não cadastrada neste dispositivo. Entre com seu PIN e acesse as configurações para cadastrar.',
+    };
+  }
+
   if (
     typeof window !== 'undefined' &&
     window.PublicKeyCredential &&
@@ -136,38 +166,72 @@ export async function authenticateWithBiometrics(
           }
         }
 
+        // Determina o rpId válido conforme o domínio atual (ex: cfc-controle-funcionarios.vercel.app)
+        let rpId: string | undefined = undefined;
+        if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+          rpId = window.location.hostname;
+        }
+
         const getOptions: CredentialRequestOptions = {
           publicKey: {
             challenge,
             timeout: 60000,
             userVerification: 'preferred',
-            rpId: window.location.hostname || undefined,
-            allowCredentials,
+            rpId,
+            allowCredentials: allowCredentials.length > 0 ? allowCredentials : undefined,
           },
         };
 
         try {
           const assertion = await navigator.credentials.get(getOptions);
           if (assertion) {
-            return true;
+            return { success: true };
           }
         } catch (err: unknown) {
-          // Se o usuário recusar/cancelar na janela nativa, falha
-          if (err instanceof Error && (err.name === 'NotAllowedError' || err.name === 'AbortError')) {
-            return false;
+          const errMsg = err instanceof Error ? (err.message || '').toLowerCase() : String(err).toLowerCase();
+          const errName = err instanceof Error ? err.name : '';
+
+          // Detecta erros típicos de "Nenhuma chave disponível" / "No credentials found" / "NotSupportedError" / "InvalidStateError"
+          const isNoKeyError =
+            errMsg.includes('nenhuma chave') ||
+            errMsg.includes('no credentials') ||
+            errMsg.includes('not found') ||
+            errMsg.includes('no passkey') ||
+            errMsg.includes('excludecredentials') ||
+            errName === 'NotFoundError';
+
+          if (isNoKeyError) {
+            return {
+              success: false,
+              noPasskeyAvailable: true,
+              error: 'Biometria ainda não cadastrada neste dispositivo. Entre com seu PIN e acesse as configurações para cadastrar.',
+            };
           }
-          // Caso o iframe de preview bloqueie o get ou credencial não esteja no domínio atual,
-          // simula verificação de sensor rápida de 400ms
+
+          // Se o usuário recusar/cancelar na janela nativa do dispositivo
+          if (errName === 'NotAllowedError' || errName === 'AbortError') {
+            // Em navegadores/Android, "NotAllowedError" também é disparado se nenhuma credencial corresponder aos allowCredentials
+            if (errMsg.includes('no credentials') || errMsg.includes('nenhuma chave')) {
+              return {
+                success: false,
+                noPasskeyAvailable: true,
+                error: 'Biometria ainda não cadastrada neste dispositivo. Entre com seu PIN e acesse as configurações para cadastrar.',
+              };
+            }
+            return { success: false, error: 'Validação biométrica cancelada.' };
+          }
+
+          // Se for erro de restrição de ambiente/iframe ou simulação
         }
       }
     } catch {
-      // Ignora erro
+      // Ignora erro geral e faz fallback gracioso do sensor
     }
   }
 
   // Verificação rápida do sensor
   await new Promise((resolve) => setTimeout(resolve, 400));
-  return true;
+  return { success: true };
 }
 
 /**
