@@ -24,6 +24,7 @@ import {
   Download,
   Upload,
   RotateCcw,
+  X,
 } from 'lucide-react';
 
 const STORAGE_KEY_EMPLOYEES = 'cfc_employees_v5';
@@ -147,9 +148,21 @@ export default function App() {
     return { ativos, demitidos, alertaFerias, vencidas };
   }, [employees]);
 
+  // Função auxiliar para remover acentos e converter para minúsculas
+  const normalizeText = (text: string | null | undefined): string => {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  };
+
   // Filtragem e busca em tempo real com suporte a filtro de Férias Vencidas e Alerta 60d
   const filteredEmployees = useMemo(() => {
-    const term = searchTerm.toLowerCase().trim();
+    const rawTerm = searchTerm.trim();
+    const term = normalizeText(rawTerm);
+    const digitsOnlyTerm = rawTerm.replace(/\D/g, '');
 
     return employees.filter((emp) => {
       const isDem = Boolean(emp.dataDemissao);
@@ -160,14 +173,22 @@ export default function App() {
       if (statusFilter === 'alerta' && (isDem || !temFeriasAlerta(emp))) return false;
       if (statusFilter === 'vencidas' && (isDem || !temFeriasVencidas(emp))) return false;
 
-      if (!term) return true;
+      // Se a barra de pesquisa estiver vazia, retorna todos do filtro ativo
+      if (!term && !digitsOnlyTerm) return true;
 
-      const matchNome = emp.nome.toLowerCase().includes(term);
-      const matchApelido = emp.apelido?.toLowerCase().includes(term);
-      const matchTelefone = emp.telefone.replace(/\D/g, '').includes(term.replace(/\D/g, ''));
-      const matchCargo = emp.cargo?.toLowerCase().includes(term);
+      const normNome = normalizeText(emp.nome);
+      const normApelido = normalizeText(emp.apelido);
+      const normCargo = normalizeText(emp.cargo);
+      const normDepto = normalizeText(emp.departamento);
+      const empPhoneDigits = (emp.telefone || '').replace(/\D/g, '');
 
-      return matchNome || matchApelido || matchTelefone || matchCargo;
+      const matchNome = normNome.includes(term);
+      const matchApelido = normApelido.includes(term);
+      const matchCargo = normCargo.includes(term);
+      const matchDepto = normDepto.includes(term);
+      const matchTelefone = digitsOnlyTerm ? empPhoneDigits.includes(digitsOnlyTerm) : false;
+
+      return matchNome || matchApelido || matchCargo || matchDepto || matchTelefone;
     });
   }, [employees, searchTerm, statusFilter]);
 
@@ -420,14 +441,26 @@ export default function App() {
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
               {/* Campo de Busca Rápida por Nome, Apelido ou WhatsApp */}
               <div className="relative flex-1 max-w-md w-full">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Buscar por nome, apelido ou WhatsApp..."
-                  className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-xs"
+                  aria-label="Buscar funcionários"
+                  className="w-full pl-10 pr-9 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-xs"
                 />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    title="Limpar pesquisa"
+                    aria-label="Limpar pesquisa"
+                    className="absolute right-2.5 top-2.5 p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* Filtros em Abas Discretas (Rolagem suave oculta no celular) */}
@@ -538,30 +571,43 @@ export default function App() {
                   <Users className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
                 )}
                 <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">
-                  {statusFilter === 'vencidas'
+                  {searchTerm.trim()
+                    ? 'Nenhum funcionário encontrado'
+                    : statusFilter === 'vencidas'
                     ? 'Nenhum funcionário com férias vencidas'
                     : statusFilter === 'alerta'
                     ? 'Nenhum funcionário com férias a vencer em 60 dias'
                     : 'Nenhum funcionário encontrado'}
                 </h3>
                 <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                  {statusFilter === 'vencidas'
+                  {searchTerm.trim()
+                    ? `Nenhum resultado correspondente a "${searchTerm}". Tente outro nome, apelido, cargo ou WhatsApp.`
+                    : statusFilter === 'vencidas'
                     ? 'Excelente! Não há períodos aquisitivos com prazo limite ultrapassado e saldo pendente de gozo.'
                     : statusFilter === 'alerta'
                     ? 'Tudo em dia! Não há colaboradores no prazo crítico dos últimos 60 dias do período concessivo.'
-                    : searchTerm
-                    ? 'Tente buscar com outros termos de nome, apelido ou telefone.'
                     : 'Não há funcionários cadastrados nesta categoria.'}
                 </p>
-                {statusFilter !== 'todos' && (
-                  <button
-                    type="button"
-                    onClick={() => setStatusFilter('todos')}
-                    className="mt-4 px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-colors cursor-pointer"
-                  >
-                    Ver Todos os Funcionários
-                  </button>
-                )}
+                <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchTerm('')}
+                      className="px-4 py-2 text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl transition-colors cursor-pointer"
+                    >
+                      Limpar Pesquisa
+                    </button>
+                  )}
+                  {statusFilter !== 'todos' && (
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter('todos')}
+                      className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-colors cursor-pointer"
+                    >
+                      Ver Todos os Funcionários
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <CleanEmployeeList
