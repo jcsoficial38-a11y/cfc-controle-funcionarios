@@ -25,46 +25,42 @@ import {
   Upload,
   RotateCcw,
   X,
+  Undo2,
+  ShieldCheck,
 } from 'lucide-react';
-
-const STORAGE_KEY_EMPLOYEES = 'cfc_employees_v5';
-const STORAGE_KEY_THEME = 'cfc_theme_v5';
-const STORAGE_KEY_MANAGER = 'cfc_manager_v5';
+import {
+  loadEmployeesSync,
+  saveEmployees,
+  loadManagerSync,
+  saveManager,
+  loadThemeSync,
+  saveTheme,
+  requestPersistentStorage,
+  createSafetyBackup,
+  restorePreResetBackup,
+  idbGet,
+  CFC_KEY_EMPLOYEES,
+  CFC_KEY_MANAGER,
+} from './utils/storageService';
 
 export default function App() {
   // Controle da tela de abertura: false = Tela Inicial Super Limpa, true = Dentro do Aplicativo
   const [isInApp, setIsInApp] = useState<boolean>(false);
 
-  // Perfil do Gestor (definido ou editado dentro do aplicativo)
+  // Perfil do Gestor (persistido com migração universal e IndexedDB)
   const [manager, setManager] = useState<ManagerProfile | null>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_MANAGER);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // Ignora erro
-    }
-    return null;
+    return loadManagerSync();
   });
 
   // Modo claro / escuro
   const [darkMode, setDarkMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_THEME);
-    if (saved) return saved === 'dark';
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return loadThemeSync();
   });
 
-  // Lista de funcionários persistida no LocalStorage
+  // Lista de funcionários persistida no armazenamento durável
   const [employees, setEmployees] = useState<Employee[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_EMPLOYEES);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {
-      // Fallback
-    }
-    return INITIAL_EMPLOYEES;
+    const { employees: initialEmployees } = loadEmployeesSync();
+    return initialEmployees;
   });
 
   // Busca e Filtros
@@ -92,28 +88,83 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sincroniza tema dark no HTML
+  // Sincroniza tema dark no HTML e no armazenamento
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
-      localStorage.setItem(STORAGE_KEY_THEME, 'dark');
     } else {
       document.documentElement.classList.remove('dark');
-      localStorage.setItem(STORAGE_KEY_THEME, 'light');
     }
+    saveTheme(darkMode);
   }, [darkMode]);
 
-  // Persiste Gestor no LocalStorage
+  // Persiste Gestor no armazenamento durável (LocalStorage + IndexedDB + Backup)
   useEffect(() => {
     if (manager) {
-      localStorage.setItem(STORAGE_KEY_MANAGER, JSON.stringify(manager));
+      saveManager(manager);
     }
   }, [manager]);
 
-  // Persiste Funcionários no LocalStorage
+  // Persiste Funcionários no armazenamento durável (LocalStorage + IndexedDB + Snapshots)
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_EMPLOYEES, JSON.stringify(employees));
+    saveEmployees(employees);
   }, [employees]);
+
+  // Solicita persistência durável ao navegador, recupera do IndexedDB se necessário e sincroniza abas
+  useEffect(() => {
+    // 1. Solicita armazenamento persistente ao navegador para blindar contra descarte de dados
+    requestPersistentStorage();
+
+    // 2. Verificação assíncrona com IndexedDB (proteção de segundo nível se LocalStorage estiver vazio)
+    (async () => {
+      try {
+        const idbEmployees = await idbGet<Employee[]>(CFC_KEY_EMPLOYEES);
+        if (idbEmployees && Array.isArray(idbEmployees) && idbEmployees.length > 0) {
+          setEmployees((current) => {
+            // Se o estado atual tiver sido esvaziado indevidamente
+            if (current.length === 0) {
+              return idbEmployees;
+            }
+            return current;
+          });
+        }
+
+        const idbManager = await idbGet<ManagerProfile>(CFC_KEY_MANAGER);
+        if (idbManager && typeof idbManager === 'object') {
+          setManager((curr) => curr || idbManager);
+        }
+      } catch {
+        // Silencia
+      }
+    })();
+
+    // 3. Sincronização multiabas e janelas em tempo real
+    const handleStorageSync = (e: StorageEvent) => {
+      if ((e.key === CFC_KEY_EMPLOYEES || e.key === 'cfc_employees_v5') && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) {
+            setEmployees(parsed);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      if ((e.key === CFC_KEY_MANAGER || e.key === 'cfc_manager_v5') && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed && typeof parsed === 'object') {
+            setManager(parsed);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageSync);
+    return () => window.removeEventListener('storage', handleStorageSync);
+  }, []);
 
   // Sincroniza funcionário selecionado
   useEffect(() => {
@@ -286,10 +337,12 @@ export default function App() {
       try {
         const json = JSON.parse(event.target?.result as string);
         if (Array.isArray(json)) {
+          // Cria backup preventivo automático antes de importar
+          createSafetyBackup(employees);
           setEmployees(json);
-          alert('Dados carregados com sucesso!');
+          alert(`Backup carregado com sucesso! ${json.length} colaboradores restaurados.`);
         } else {
-          alert('Arquivo JSON inválido.');
+          alert('Arquivo JSON inválido. Certifique-se de que é um arquivo de backup do CFC.');
         }
       } catch {
         alert('Erro ao carregar o arquivo JSON.');
@@ -300,8 +353,26 @@ export default function App() {
   };
 
   const handleResetData = () => {
-    if (confirm('Deseja recarregar a lista padrão de funcionários?')) {
+    if (
+      confirm(
+        'Deseja carregar a lista de exemplo?\n\nSeus dados atuais serão salvos em um backup de segurança e poderão ser restaurados a qualquer momento.'
+      )
+    ) {
+      createSafetyBackup(employees);
       setEmployees(INITIAL_EMPLOYEES);
+      alert('Dados de exemplo carregados. Seus dados anteriores foram guardados em backup de segurança.');
+    }
+  };
+
+  const handleRestoreBackup = () => {
+    const backup = restorePreResetBackup();
+    if (backup && Array.isArray(backup) && backup.length > 0) {
+      if (confirm(`Restaurar o backup de segurança anterior com ${backup.length} colaborador(es)?`)) {
+        setEmployees(backup);
+        alert('Backup restaurado com sucesso! Seus colaboradores estão de volta.');
+      }
+    } else {
+      alert('Nenhum backup recente de segurança encontrado neste dispositivo.');
     }
   };
 
@@ -632,14 +703,23 @@ export default function App() {
                 <span>Clique sobre qualquer nome para ver a ficha completa</span>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleRestoreBackup}
+                  title="Restaurar o backup de segurança automático salvo na memória"
+                  className="hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-1 transition-colors cursor-pointer text-xs"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                  <span>Restaurar Backup Seguro</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleExportData}
                   className="hover:text-slate-700 dark:hover:text-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Exportar Backup</span>
+                  <span>Exportar JSON</span>
                 </button>
                 <button
                   type="button"
@@ -647,15 +727,16 @@ export default function App() {
                   className="hover:text-slate-700 dark:hover:text-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  <span>Restaurar</span>
+                  <span>Importar JSON</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleResetData}
+                  title="Carrega colaboradores de teste (seus dados reais ficam salvos em backup automático)"
                   className="hover:text-slate-700 dark:hover:text-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Dados Exemplo</span>
+                  <span>Carregar Exemplos</span>
                 </button>
               </div>
             </div>
