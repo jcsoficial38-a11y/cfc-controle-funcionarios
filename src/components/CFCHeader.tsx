@@ -1,6 +1,6 @@
 import React from 'react';
 import { ManagerProfile } from '../types';
-import { Plus, Sun, Moon, Lock, Settings } from 'lucide-react';
+import { Plus, Sun, Moon, Lock, Settings, Cloud } from 'lucide-react';
 
 interface CFCHeaderProps {
   manager: ManagerProfile | null;
@@ -9,6 +9,7 @@ interface CFCHeaderProps {
   onLock: () => void;
   onOpenNewEmployee: () => void;
   onOpenManagerSettings: () => void;
+  isCloudConnected?: boolean;
 }
 
 export const CFCHeader: React.FC<CFCHeaderProps> = ({
@@ -18,6 +19,7 @@ export const CFCHeader: React.FC<CFCHeaderProps> = ({
   onLock,
   onOpenNewEmployee,
   onOpenManagerSettings,
+  isCloudConnected,
 }) => {
   const getAccentBtn = () => {
     switch (manager?.accentColor) {
@@ -77,6 +79,20 @@ export const CFCHeader: React.FC<CFCHeaderProps> = ({
           >
             <Lock className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </button>
+
+          {/* Indicador de Nuvem / Firestore Conectado */}
+          {isCloudConnected && (
+            <button
+              type="button"
+              onClick={onOpenManagerSettings}
+              title="Banco de Dados Firestore Conectado & Sincronizado Online"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg sm:rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <Cloud className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Nuvem Ativa</span>
+            </button>
+          )}
 
           {/* Botão de Perfil / Configurações do Gestor */}
           <button

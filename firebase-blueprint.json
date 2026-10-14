@@ -1,0 +1,94 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and metadata for the account",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The unique ID of the user matching their auth UID"
+        },
+        "email": {
+          "type": "string",
+          "description": "The primary email address of the authenticated user"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the user"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp of the last sync or update"
+        }
+      },
+      "required": ["userId", "email"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Employee record containing employment and vacation history",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the employee"
+        },
+        "userId": {
+          "type": "string",
+          "description": "The owner user ID matching request.auth.uid"
+        },
+        "nome": {
+          "type": "string",
+          "description": "Full name of the employee"
+        },
+        "apelido": {
+          "type": "string",
+          "description": "Nickname or familiar name"
+        },
+        "telefone": {
+          "type": "string",
+          "description": "Phone number / WhatsApp"
+        },
+        "genero": {
+          "type": "string",
+          "description": "Gender (M or F)"
+        },
+        "cargo": {
+          "type": "string",
+          "description": "Role or position"
+        },
+        "departamento": {
+          "type": "string",
+          "description": "Department"
+        },
+        "dataAdmissao": {
+          "type": "string",
+          "description": "Admission date YYYY-MM-DD"
+        },
+        "dataDemissao": {
+          "type": "string",
+          "description": "Dismissal date YYYY-MM-DD if applicable"
+        },
+        "vacationRecords": {
+          "type": "array",
+          "description": "List of vacation records taken or sold"
+        },
+        "criadoEm": {
+          "type": "string",
+          "description": "Creation timestamp ISO"
+        }
+      },
+      "required": ["id", "userId", "nome", "dataAdmissao"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Owner-only user account profile and sync metadata"
+    },
+    "/users/{userId}/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Owner-only employee records and vacation tracking"
+    }
+  }
+}

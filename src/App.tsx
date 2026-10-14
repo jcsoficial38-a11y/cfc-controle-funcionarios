@@ -42,6 +42,8 @@ import {
   CFC_KEY_EMPLOYEES,
   CFC_KEY_MANAGER,
 } from './utils/storageService';
+import { auth, onAuthUserChanged, syncDataToCloud } from './utils/firebase';
+import { User as FirebaseUser } from 'firebase/auth';
 
 export default function App() {
   // Controle da tela de abertura: false = Tela Inicial Super Limpa, true = Dentro do Aplicativo
@@ -173,6 +175,27 @@ export default function App() {
       if (found) setSelectedEmployee(found);
     }
   }, [employees, selectedEmployee]);
+
+  // Monitoramento do estado de login no Firebase
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(() => auth.currentUser);
+
+  useEffect(() => {
+    const unsub = onAuthUserChanged((u) => setFirebaseUser(u));
+    return () => unsub();
+  }, []);
+
+  // Sincronização automática para o Firestore em segundo plano quando conectado
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    if (firebaseUser && employees.length > 0) {
+      timeoutId = setTimeout(() => {
+        syncDataToCloud(employees, manager).catch((err) => {
+          console.warn('[Firebase AutoSync] Erro na sincronização:', err);
+        });
+      }, 2000);
+    }
+    return () => clearTimeout(timeoutId);
+  }, [employees, manager, firebaseUser]);
 
   // Contadores dinâmicos (Cálculo automático de funcionários ativos, demitidos e alertas CLT)
   const counters = useMemo(() => {
@@ -399,6 +422,7 @@ export default function App() {
               setIsEmployeeModalOpen(true);
             }}
             onOpenManagerSettings={() => setIsManagerSettingsOpen(true)}
+            isCloudConnected={Boolean(firebaseUser)}
           />
 
           {/* Conteúdo Principal da Aplicação */}
@@ -788,17 +812,27 @@ export default function App() {
             />
           )}
 
-          {/* Modal de Perfil & Configurações do Gestor (Área interna) */}
-          <ManagerSettingsModal
-            isOpen={isManagerSettingsOpen}
-            onClose={() => setIsManagerSettingsOpen(false)}
-            manager={manager}
-            darkMode={darkMode}
-            onToggleDarkMode={() => setDarkMode(!darkMode)}
-            onUpdateManager={(updated) => setManager(updated)}
-          />
         </>
       )}
+
+      {/* Modal de Perfil & Configurações do Gestor (Acessível de dentro do app e da tela de bloqueio) */}
+      <ManagerSettingsModal
+        isOpen={isManagerSettingsOpen}
+        onClose={() => setIsManagerSettingsOpen(false)}
+        manager={manager}
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(!darkMode)}
+        onUpdateManager={(updated) => setManager(updated)}
+        employees={employees}
+        onRestoreFromCloud={(cloudEmployees, cloudManager) => {
+          if (cloudEmployees && cloudEmployees.length > 0) {
+            setEmployees(cloudEmployees);
+          }
+          if (cloudManager) {
+            setManager(cloudManager);
+          }
+        }}
+      />
 
       {/* Input invisível para restauração de Backup */}
       <input
