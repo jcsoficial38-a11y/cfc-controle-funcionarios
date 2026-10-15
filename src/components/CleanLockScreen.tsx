@@ -23,12 +23,14 @@ interface CleanLockScreenProps {
   onUnlock: () => void;
   onUpdateManager?: (manager: ManagerProfile) => void;
   onOpenSettings?: () => void;
+  isCloudConnected?: boolean;
 }
 
 export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
   manager,
   onUnlock,
   onUpdateManager,
+  isCloudConnected,
 }) => {
   const [pinDigits, setPinDigits] = useState<string>('');
   const [isScanning, setIsScanning] = useState(false);
@@ -260,6 +262,13 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
         <h1 className="text-lg font-bold text-white tracking-tight">
           Controle Funcionário Completo
         </h1>
+
+        {isCloudConnected && (
+          <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-[10px] font-semibold text-emerald-400 shadow-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Sincronizado Online (Firestore)</span>
+          </div>
+        )}
 
         {manager ? (
           <div className="mt-1 mb-5">

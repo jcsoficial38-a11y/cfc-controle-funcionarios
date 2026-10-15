@@ -10,6 +10,8 @@ interface CFCHeaderProps {
   onOpenNewEmployee: () => void;
   onOpenManagerSettings: () => void;
   isCloudConnected?: boolean;
+  isCloudSyncing?: boolean;
+  lastCloudSyncTime?: string | null;
 }
 
 export const CFCHeader: React.FC<CFCHeaderProps> = ({
@@ -20,6 +22,8 @@ export const CFCHeader: React.FC<CFCHeaderProps> = ({
   onOpenNewEmployee,
   onOpenManagerSettings,
   isCloudConnected,
+  isCloudSyncing,
+  lastCloudSyncTime,
 }) => {
   const getAccentBtn = () => {
     switch (manager?.accentColor) {
@@ -85,12 +89,16 @@ export const CFCHeader: React.FC<CFCHeaderProps> = ({
             <button
               type="button"
               onClick={onOpenManagerSettings}
-              title="Banco de Dados Firestore Conectado & Sincronizado Online"
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg sm:rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+              title={
+                isCloudSyncing
+                  ? 'Sincronizando com Firestore...'
+                  : `Firestore Conectado & Sincronizado Online${lastCloudSyncTime ? ` (${lastCloudSyncTime})` : ''}`
+              }
+              className="flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg sm:rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors cursor-pointer shrink-0"
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className={`w-2 h-2 rounded-full ${isCloudSyncing ? 'bg-amber-500 animate-ping' : 'bg-emerald-500 animate-pulse'}`} />
               <Cloud className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Nuvem Ativa</span>
+              <span className="hidden xs:inline">{isCloudSyncing ? 'Sincronizando...' : 'Sincronizado Online'}</span>
             </button>
           )}
 

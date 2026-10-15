@@ -176,22 +176,67 @@ export default function App() {
     }
   }, [employees, selectedEmployee]);
 
-  // Monitoramento do estado de login no Firebase
+  // Monitoramento do estado de login no Firebase e sincronização automática
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(() => auth.currentUser);
+  const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
+  const [lastCloudSyncTime, setLastCloudSyncTime] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('cfc_last_cloud_sync_time');
+    } catch {
+      return null;
+    }
+  });
 
+  // 2. Observador onAuthStateChanged(auth, (user) => { ... }) no carregamento da página
+  // Verifica automaticamente se já existe um usuário logado na sessão persistida
   useEffect(() => {
-    const unsub = onAuthUserChanged((u) => setFirebaseUser(u));
+    const unsub = onAuthUserChanged(async (user) => {
+      setFirebaseUser(user);
+      if (user) {
+        // 3. Se o usuário já estiver salvo na sessão, reconecta e ativa a sincronização com o Firestore de forma automática
+        try {
+          setIsCloudSyncing(true);
+          const res = await syncDataToCloud(employees, manager);
+          if (res.success) {
+            setLastCloudSyncTime(res.timestamp);
+            try {
+              localStorage.setItem('cfc_last_cloud_sync_time', res.timestamp);
+            } catch {
+              // ignore
+            }
+          }
+        } catch (err) {
+          console.warn('[Firebase AutoSync] Erro na sincronização inicial:', err);
+        } finally {
+          setIsCloudSyncing(false);
+        }
+      }
+    });
+
     return () => unsub();
   }, []);
 
-  // Sincronização automática para o Firestore em segundo plano quando conectado
+  // Sincronização automática para o Firestore em segundo plano quando dados mudam
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
     if (firebaseUser && employees.length > 0) {
-      timeoutId = setTimeout(() => {
-        syncDataToCloud(employees, manager).catch((err) => {
-          console.warn('[Firebase AutoSync] Erro na sincronização:', err);
-        });
+      timeoutId = setTimeout(async () => {
+        try {
+          setIsCloudSyncing(true);
+          const res = await syncDataToCloud(employees, manager);
+          if (res.success) {
+            setLastCloudSyncTime(res.timestamp);
+            try {
+              localStorage.setItem('cfc_last_cloud_sync_time', res.timestamp);
+            } catch {
+              // ignore
+            }
+          }
+        } catch (err) {
+          console.warn('[Firebase AutoSync] Erro na sincronização contínua:', err);
+        } finally {
+          setIsCloudSyncing(false);
+        }
       }, 2000);
     }
     return () => clearTimeout(timeoutId);
@@ -408,6 +453,7 @@ export default function App() {
           onUnlock={() => setIsInApp(true)}
           onUpdateManager={(updated) => setManager(updated)}
           onOpenSettings={() => setIsManagerSettingsOpen(true)}
+          isCloudConnected={Boolean(firebaseUser)}
         />
       ) : (
         <>
@@ -423,6 +469,8 @@ export default function App() {
             }}
             onOpenManagerSettings={() => setIsManagerSettingsOpen(true)}
             isCloudConnected={Boolean(firebaseUser)}
+            isCloudSyncing={isCloudSyncing}
+            lastCloudSyncTime={lastCloudSyncTime}
           />
 
           {/* Conteúdo Principal da Aplicação */}
@@ -721,10 +769,22 @@ export default function App() {
 
             {/* Rodapé Discreto com Utilidades de Backup */}
             <div className="pt-6 border-t border-slate-200/80 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
-              <div>
+              <div className="flex items-center gap-2 flex-wrap">
                 <span>CFC &middot; Controle Funcionário Completo</span>
-                <span aria-hidden="true" className="mx-2">&middot;</span>
-                <span>Clique sobre qualquer nome para ver a ficha completa</span>
+                {firebaseUser ? (
+                  <>
+                    <span aria-hidden="true" className="mx-1">&middot;</span>
+                    <span className="inline-flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Sincronizado Online (Firestore){lastCloudSyncTime ? ` &bull; ${lastCloudSyncTime}` : ''}</span>
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span aria-hidden="true" className="mx-2">&middot;</span>
+                    <span>Clique sobre qualquer nome para ver a ficha completa</span>
+                  </>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-3">

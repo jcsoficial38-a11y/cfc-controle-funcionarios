@@ -199,11 +199,21 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
   const [authUser, setAuthUser] = useState<FirebaseUser | null>(() => auth.currentUser);
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
   const [cloudFeedback, setCloudFeedback] = useState<string | null>(null);
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('cfc_last_cloud_sync_time');
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     const unsub = onAuthUserChanged((user) => {
       setAuthUser(user);
+      if (user) {
+        const stored = localStorage.getItem('cfc_last_cloud_sync_time');
+        if (stored) setLastSyncTime(stored);
+      }
     });
     return () => unsub();
   }, []);
@@ -219,6 +229,11 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
         const res = await syncDataToCloud(employees, manager);
         if (res.success) {
           setLastSyncTime(res.timestamp);
+          try {
+            localStorage.setItem('cfc_last_cloud_sync_time', res.timestamp);
+          } catch {
+            // ignore
+          }
           setCloudFeedback(`Sincronizado Online! (${res.timestamp}) - ${res.count} colaboradores salvos.`);
         }
       }
@@ -243,6 +258,11 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
       const res = await syncDataToCloud(employees, manager);
       if (res.success) {
         setLastSyncTime(res.timestamp);
+        try {
+          localStorage.setItem('cfc_last_cloud_sync_time', res.timestamp);
+        } catch {
+          // ignore
+        }
         setCloudFeedback(`Sincronizado Online com sucesso! (${res.timestamp})`);
       }
     } catch (err) {

@@ -15,6 +15,8 @@ import {
   signOut,
   onAuthStateChanged,
   User,
+  setPersistence,
+  browserLocalPersistence,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -46,6 +48,14 @@ export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getA
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 export const auth = getAuth(app);
+
+// 1. Configura a persistência de autenticação como LOCAL para que o login não se perca ao fechar o app
+if (typeof window !== 'undefined') {
+  setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.warn('[Firebase Auth] Erro ao definir browserLocalPersistence:', err);
+  });
+}
+
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
@@ -117,6 +127,9 @@ if (typeof window !== 'undefined') {
 // --- SERVIÇOS DE AUTENTICAÇÃO GOOGLE ---
 export async function loginWithGoogle(): Promise<User> {
   try {
+    if (typeof window !== 'undefined') {
+      await setPersistence(auth, browserLocalPersistence);
+    }
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (err: unknown) {
