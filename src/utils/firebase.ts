@@ -16,6 +16,7 @@ import {
   onAuthStateChanged,
   User,
   setPersistence,
+  indexedDBLocalPersistence,
   browserLocalPersistence,
 } from 'firebase/auth';
 import {
@@ -23,10 +24,12 @@ import {
   doc,
   setDoc,
   getDoc,
+  deleteDoc,
   collection,
   getDocs,
   getDocFromServer,
   serverTimestamp,
+  onSnapshot,
 } from 'firebase/firestore';
 import { Employee, ManagerProfile } from '../types';
 import rawConfig from '../../firebase-applet-config.json';
@@ -49,10 +52,14 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 export const auth = getAuth(app);
 
-// 1. Configura a persistência de autenticação como LOCAL para que o login não se perca ao fechar o app
+// 3. Configura o Firebase Auth com persistência local ativa ('indexedDBLocalPersistence')
+// para que o usuário permaneça conectado na nuvem mesmo após fechar e reabrir o aplicativo
 if (typeof window !== 'undefined') {
-  setPersistence(auth, browserLocalPersistence).catch((err) => {
-    console.warn('[Firebase Auth] Erro ao definir browserLocalPersistence:', err);
+  setPersistence(auth, indexedDBLocalPersistence).catch(() => {
+    // Fallback caso indexedDB esteja indisponível em modo privado restrito
+    setPersistence(auth, browserLocalPersistence).catch((err) => {
+      console.warn('[Firebase Auth] Erro ao definir persistência:', err);
+    });
   });
 }
 
@@ -128,7 +135,11 @@ if (typeof window !== 'undefined') {
 export async function loginWithGoogle(): Promise<User> {
   try {
     if (typeof window !== 'undefined') {
-      await setPersistence(auth, browserLocalPersistence);
+      try {
+        await setPersistence(auth, indexedDBLocalPersistence);
+      } catch {
+        await setPersistence(auth, browserLocalPersistence);
+      }
     }
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
@@ -149,6 +160,23 @@ export async function logoutFirebase(): Promise<void> {
 
 export function onAuthUserChanged(callback: (user: User | null) => void): () => void {
   return onAuthStateChanged(auth, callback);
+}
+
+// --- LIMPEZA E SANITIZAÇÃO DE DADOS PARA O FIRESTORE ---
+export function cleanFirestoreData(data: any): any {
+  if (data === undefined) return null;
+  if (data === null) return null;
+  if (typeof data !== 'object') return data;
+  if (Array.isArray(data)) {
+    return data.map((item) => cleanFirestoreData(item));
+  }
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) {
+      result[key] = cleanFirestoreData(value);
+    }
+  }
+  return result;
 }
 
 // --- SERVIÇOS DE SINCRONIZAÇÃO NUVEM (FIRESTORE) ---
@@ -177,30 +205,53 @@ export async function syncDataToCloud(
   const userDocPath = `users/${userId}`;
 
   try {
-    // 1. Grava metadados do usuário e perfil do gestor
+    // 1. Grava metadados do usuário, perfil do gestor e snapshot de backup integral
     await setDoc(
       doc(db, 'users', userId),
-      {
+      cleanFirestoreData({
         userId,
         email: currentUser.email || '',
         displayName: currentUser.displayName || manager?.nome || 'Gestor',
-        managerProfile: manager ? { ...manager } : null,
+        managerProfile: manager ? cleanFirestoreData(manager) : null,
         totalEmployees: employees.length,
+        employeesSnapshot: employees.map((e) => cleanFirestoreData(e)),
         updatedAt: serverTimestamp(),
         lastSyncClientIso: new Date().toISOString(),
-      },
+      }),
       { merge: true }
     );
 
-    // 2. Grava cada colaborador na subcoleção individual
+    // 2. Busca e limpa documentos de funcionários deletados localmente
+    const empColPath = `users/${userId}/employees`;
+    try {
+      const existingDocs = await getDocs(collection(db, 'users', userId, 'employees'));
+      const localIds = new Set(employees.map((e) => e.id));
+      for (const d of existingDocs.docs) {
+        if (!localIds.has(d.id)) {
+          const deletePath = `users/${userId}/employees/${d.id}`;
+          try {
+            await deleteDoc(doc(db, 'users', userId, 'employees', d.id));
+          } catch (err) {
+            handleFirestoreError(err, OperationType.DELETE, deletePath);
+          }
+        }
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.LIST, empColPath);
+    }
+
+    // 3. Grava cada colaborador na subcoleção individual (incluindo férias, períodos CLT e prazos)
     for (const emp of employees) {
       const empPath = `users/${userId}/employees/${emp.id}`;
       try {
-        await setDoc(doc(db, 'users', userId, 'employees', emp.id), {
-          ...emp,
-          userId,
-          updatedAt: serverTimestamp(),
-        });
+        await setDoc(
+          doc(db, 'users', userId, 'employees', emp.id),
+          cleanFirestoreData({
+            ...emp,
+            userId,
+            updatedAt: serverTimestamp(),
+          })
+        );
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, empPath);
       }
@@ -214,6 +265,57 @@ export async function syncDataToCloud(
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, userDocPath);
   }
+}
+
+/**
+ * Escuta atualizações do Firestore em tempo real vinculadas ao usuário logado
+ */
+export function subscribeToCloudData(
+  onData: (data: { employees: Employee[]; manager: ManagerProfile | null; source: 'cloud' }) => void
+): () => void {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return () => {};
+
+  const userId = currentUser.uid;
+  const empColPath = `users/${userId}/employees`;
+
+  const unsubscribeEmployees = onSnapshot(
+    collection(db, 'users', userId, 'employees'),
+    async (snapshot) => {
+      let cloudEmployees: Employee[] = [];
+      snapshot.forEach((docSnap) => {
+        cloudEmployees.push(docSnap.data() as Employee);
+      });
+
+      let cloudManager: ManagerProfile | null = null;
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          const udata = userDoc.data();
+          cloudManager = udata?.managerProfile || null;
+          // Se a subcoleção estiver vazia mas existir snapshot no documento principal
+          if (cloudEmployees.length === 0 && Array.isArray(udata?.employeesSnapshot) && udata.employeesSnapshot.length > 0) {
+            cloudEmployees = udata.employeesSnapshot as Employee[];
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      onData({
+        employees: cloudEmployees,
+        manager: cloudManager,
+        source: 'cloud',
+      });
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, empColPath);
+    }
+  );
+
+  return () => {
+    unsubscribeEmployees();
+  };
 }
 
 /**
@@ -253,11 +355,15 @@ export async function fetchDataFromCloud(): Promise<{
       handleFirestoreError(err, OperationType.LIST, empColPath);
     }
 
-    const cloudEmployees: Employee[] = [];
-    empDocs.forEach((d) => {
-      const item = d.data() as Employee;
-      cloudEmployees.push(item);
-    });
+    let cloudEmployees: Employee[] = [];
+    if (empDocs && !empDocs.empty) {
+      empDocs.forEach((d) => {
+        const item = d.data() as Employee;
+        cloudEmployees.push(item);
+      });
+    } else if (userDocSnap.exists() && Array.isArray(userDocSnap.data()?.employeesSnapshot)) {
+      cloudEmployees = userDocSnap.data()?.employeesSnapshot as Employee[];
+    }
 
     return {
       employees: cloudEmployees,

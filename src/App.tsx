@@ -42,7 +42,13 @@ import {
   CFC_KEY_EMPLOYEES,
   CFC_KEY_MANAGER,
 } from './utils/storageService';
-import { auth, onAuthUserChanged, syncDataToCloud } from './utils/firebase';
+import {
+  auth,
+  onAuthUserChanged,
+  syncDataToCloud,
+  subscribeToCloudData,
+  fetchDataFromCloud,
+} from './utils/firebase';
 import { User as FirebaseUser } from 'firebase/auth';
 
 export default function App() {
@@ -176,7 +182,7 @@ export default function App() {
     }
   }, [employees, selectedEmployee]);
 
-  // Monitoramento do estado de login no Firebase e sincronização automática
+  // Monitoramento do estado de login no Firebase e sincronização automática em tempo real
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(() => auth.currentUser);
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
   const [lastCloudSyncTime, setLastCloudSyncTime] = useState<string | null>(() => {
@@ -187,28 +193,55 @@ export default function App() {
     }
   });
 
-  // 2. Observador onAuthStateChanged(auth, (user) => { ... }) no carregamento da página
-  // Verifica automaticamente se já existe um usuário logado na sessão persistida
+  // Flag para evitar loops quando a atualização for recebida da nuvem
+  const isIncomingCloudUpdateRef = useRef(false);
+
+  // 1. Observador onAuthStateChanged com persistência local ativa ('indexedDBLocalPersistence')
+  // Reconecta e sincroniza automaticamente sem exigir novos cliques do usuário
   useEffect(() => {
     const unsub = onAuthUserChanged(async (user) => {
       setFirebaseUser(user);
       if (user) {
-        // 3. Se o usuário já estiver salvo na sessão, reconecta e ativa a sincronização com o Firestore de forma automática
         try {
           setIsCloudSyncing(true);
-          const res = await syncDataToCloud(employees, manager);
-          if (res.success) {
-            setLastCloudSyncTime(res.timestamp);
+          // Verifica se já existem dados salvos no Firestore deste usuário
+          const cloudData = await fetchDataFromCloud();
+          if (cloudData.employees && cloudData.employees.length > 0) {
+            isIncomingCloudUpdateRef.current = true;
+            setEmployees(cloudData.employees);
+            saveEmployees(cloudData.employees);
+            if (cloudData.manager) {
+              setManager(cloudData.manager);
+              saveManager(cloudData.manager);
+            }
+            const timeStr = cloudData.lastSync
+              ? new Date(cloudData.lastSync).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+              : new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            setLastCloudSyncTime(timeStr);
             try {
-              localStorage.setItem('cfc_last_cloud_sync_time', res.timestamp);
+              localStorage.setItem('cfc_last_cloud_sync_time', timeStr);
             } catch {
               // ignore
             }
+          } else if (employees.length > 0) {
+            // Se o Firestore estiver vazio e houver registros locais, envia imediatamente
+            const res = await syncDataToCloud(employees, manager);
+            if (res.success) {
+              setLastCloudSyncTime(res.timestamp);
+              try {
+                localStorage.setItem('cfc_last_cloud_sync_time', res.timestamp);
+              } catch {
+                // ignore
+              }
+            }
           }
         } catch (err) {
-          console.warn('[Firebase AutoSync] Erro na sincronização inicial:', err);
+          console.warn('[Firebase AutoSync] Erro na verificação/sincronização inicial:', err);
         } finally {
           setIsCloudSyncing(false);
+          setTimeout(() => {
+            isIncomingCloudUpdateRef.current = false;
+          }, 600);
         }
       }
     });
@@ -216,10 +249,39 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Sincronização automática para o Firestore em segundo plano quando dados mudam
+  // 2. Escuta de atualizações em tempo real (onSnapshot) do Firestore vinculada ao UID do usuário
+  useEffect(() => {
+    if (!firebaseUser) return;
+
+    const unsubscribe = subscribeToCloudData((cloudData) => {
+      if (cloudData.employees && cloudData.employees.length > 0) {
+        isIncomingCloudUpdateRef.current = true;
+        setEmployees(cloudData.employees);
+        saveEmployees(cloudData.employees);
+        if (cloudData.manager) {
+          setManager(cloudData.manager);
+          saveManager(cloudData.manager);
+        }
+        const nowStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setLastCloudSyncTime(nowStr);
+        try {
+          localStorage.setItem('cfc_last_cloud_sync_time', nowStr);
+        } catch {
+          // ignore
+        }
+        setTimeout(() => {
+          isIncomingCloudUpdateRef.current = false;
+        }, 600);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [firebaseUser]);
+
+  // 3. Sincronização automática em segundo plano para o Firestore quando dados mudam localmente
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
-    if (firebaseUser && employees.length > 0) {
+    if (firebaseUser && employees.length > 0 && !isIncomingCloudUpdateRef.current) {
       timeoutId = setTimeout(async () => {
         try {
           setIsCloudSyncing(true);
@@ -237,7 +299,7 @@ export default function App() {
         } finally {
           setIsCloudSyncing(false);
         }
-      }, 2000);
+      }, 1500);
     }
     return () => clearTimeout(timeoutId);
   }, [employees, manager, firebaseUser]);

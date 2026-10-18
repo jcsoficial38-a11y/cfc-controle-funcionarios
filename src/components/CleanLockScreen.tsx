@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ManagerProfile } from '../types';
 import {
   Fingerprint,
@@ -140,6 +140,24 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
       );
     }
   };
+
+  // 1. GATILHO AUTOMÁTICO DE BIOMETRIA AO ABRIR (Padrão CFC / Finanças):
+  // Ao carregar a tela de bloqueio, se a biometria estiver cadastrada/ativada,
+  // invoque AUTOMATICAMENTE o leitor de digital do dispositivo/navegador assim que a tela abrir (via useEffect/onMount)
+  const autoTriggerAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    const isCadastrada = Boolean(manager?.biometriaAtiva && manager?.biometriaCadastrada);
+    const hasKeyStorage = hasBiometricPasskeyCreated(manager?.credencialBiometricaId);
+
+    if (isCadastrada && hasKeyStorage && !autoTriggerAttemptedRef.current) {
+      autoTriggerAttemptedRef.current = true;
+      const timer = setTimeout(() => {
+        handleBiometricAuth();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [manager?.biometriaAtiva, manager?.biometriaCadastrada, manager?.credencialBiometricaId]);
 
   // Fluxo de recuperação via Biometria
   const handleRecoveryBiometric = async () => {
@@ -288,6 +306,32 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
         {/* ============================================================ */}
         {!isForgotOpen ? (
           <div className="w-full flex flex-col items-center">
+            {/* 1. Botão de Acionamento Manual da Biometria / Digital (Posicionado ACIMA dos círculos do PIN) */}
+            <button
+              type="button"
+              onClick={handleBiometricAuth}
+              disabled={isScanning}
+              title={isFaceId ? 'Desbloquear com Face ID' : 'Desbloquear com Biometria / Digital'}
+              className={`mb-5 w-full max-w-[260px] py-2.5 px-4 rounded-2xl flex items-center justify-center gap-2.5 text-xs font-semibold transition-all active:scale-95 cursor-pointer border shadow-xs select-none ${
+                isScanning
+                  ? 'border-indigo-400 bg-indigo-950/70 text-indigo-300 animate-pulse'
+                  : 'border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 active:bg-indigo-500/30 text-indigo-300 hover:text-white'
+              }`}
+            >
+              {isFaceId ? (
+                <Scan className={`w-4 h-4 ${isScanning ? 'animate-pulse text-indigo-400' : 'text-indigo-400'}`} />
+              ) : (
+                <Fingerprint className={`w-4 h-4 ${isScanning ? 'animate-pulse text-indigo-400' : 'text-indigo-400'}`} />
+              )}
+              <span>
+                {isScanning
+                  ? 'Aguardando biometria...'
+                  : isFaceId
+                  ? 'Desbloquear com Face ID'
+                  : 'Desbloquear com Biometria / Digital'}
+              </span>
+            </button>
+
             {/* Indicador de 4 Dígitos do PIN */}
             <div className="flex items-center justify-center gap-3 mb-6">
               {[0, 1, 2, 3].map((index) => {
@@ -320,64 +364,52 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
               </div>
             )}
 
-            {/* Teclado Numérico Estilo iOS / PIN Pad */}
+            {/* 2. Teclado Numérico Simétrico e Padronizado */}
             <div className="grid grid-cols-3 gap-2.5 sm:gap-3 w-full max-w-[260px] mb-4">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
                 <button
                   key={num}
                   type="button"
                   onClick={() => handleDigitPress(num)}
-                  className="h-13 sm:h-14 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 active:bg-slate-600 border border-slate-700/60 text-white text-lg font-bold transition-all active:scale-95 cursor-pointer shadow-xs"
+                  className="h-13 sm:h-14 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 active:bg-slate-600 border border-slate-700/60 text-white text-lg font-bold transition-all active:scale-95 cursor-pointer shadow-xs select-none"
                 >
                   {num}
                 </button>
               ))}
 
-              {/* Botão Biometria / Face ID */}
+              {/* Última fileira simétrica e padronizada: [ Tecla 'C' (Limpar Tudo) ] [ 0 ] [ Tecla '⌫' (Apagar 1 a 1) ] */}
+              {/* 1. Tecla 'C' (Limpar Tudo) */}
               <button
                 type="button"
-                onClick={handleBiometricAuth}
-                disabled={isScanning}
-                title={isFaceId ? 'Acessar com Face ID' : 'Acessar com Touch ID / Biometria'}
-                className={`h-13 sm:h-14 rounded-2xl flex items-center justify-center transition-all active:scale-95 cursor-pointer border ${
-                  isScanning
-                    ? 'border-indigo-400 bg-indigo-950/60 animate-pulse text-indigo-300'
-                    : 'border-slate-700/60 bg-slate-800/80 hover:bg-slate-700/80 text-indigo-400 hover:text-indigo-300'
-                }`}
+                onClick={handleClearPin}
+                title="Limpar todo o PIN"
+                className="h-13 sm:h-14 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 active:bg-slate-600 border border-slate-700/60 text-amber-400 hover:text-amber-300 text-lg font-bold flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs select-none"
               >
-                {isFaceId ? <Scan className="w-5 h-5" /> : <Fingerprint className="w-5 h-5" />}
+                C
               </button>
 
-              {/* Número 0 */}
+              {/* 2. Número 0 */}
               <button
                 type="button"
                 onClick={() => handleDigitPress('0')}
-                className="h-13 sm:h-14 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 active:bg-slate-600 border border-slate-700/60 text-white text-lg font-bold transition-all active:scale-95 cursor-pointer shadow-xs"
+                className="h-13 sm:h-14 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 active:bg-slate-600 border border-slate-700/60 text-white text-lg font-bold transition-all active:scale-95 cursor-pointer shadow-xs select-none"
               >
                 0
               </button>
 
-              {/* Botão Backspace / Apagar */}
+              {/* 3. Tecla '⌫' (Apagar 1 a 1) */}
               <button
                 type="button"
                 onClick={handleBackspace}
-                title="Apagar dígito"
-                className="h-13 sm:h-14 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 active:bg-slate-600 border border-slate-700/60 text-slate-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer text-xs font-semibold"
+                title="Apagar último dígito"
+                className="h-13 sm:h-14 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 active:bg-slate-600 border border-slate-700/60 text-slate-300 hover:text-white text-lg font-bold flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs select-none"
               >
-                Apagar
+                ⌫
               </button>
             </div>
 
             {/* Ações Secundárias: Esqueci minha senha */}
-            <div className="w-full flex items-center justify-between text-xs pt-2">
-              <button
-                type="button"
-                onClick={handleClearPin}
-                className="text-slate-500 hover:text-slate-400 transition-colors cursor-pointer"
-              >
-                Limpar
-              </button>
-
+            <div className="w-full flex items-center justify-center text-xs pt-2">
               <button
                 type="button"
                 onClick={() => {
@@ -386,7 +418,7 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
                   setIsForgotOpen(true);
                   setRecoveryMethod('options');
                 }}
-                className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors cursor-pointer inline-flex items-center gap-1"
+                className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors cursor-pointer inline-flex items-center gap-1.5"
               >
                 <HelpCircle className="w-3.5 h-3.5" />
                 <span>Esqueci minha senha</span>
