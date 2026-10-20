@@ -26,6 +26,7 @@ export const CFC_KEY_EMPLOYEES = 'cfc_employees_master_data';
 export const CFC_KEY_MANAGER = 'cfc_manager_master_data';
 export const CFC_KEY_THEME = 'cfc_theme_master_data';
 export const CFC_KEY_INIT = 'cfc_app_initialized_status';
+export const CFC_KEY_TRASH = 'cfc_trash_data';
 
 // Chaves de Backup e Recuperação
 export const CFC_KEY_BACKUP_EMPLOYEES = 'cfc_employees_backup_snapshot';
@@ -456,4 +457,21 @@ export function hasSafetyBackup(): boolean {
     localStorage.getItem(CFC_KEY_PRE_RESET_BACKUP) ||
     localStorage.getItem(CFC_KEY_BACKUP_EMPLOYEES)
   );
+}
+
+export function loadTrash(): any[] {
+  try {
+    const saved = localStorage.getItem(CFC_KEY_TRASH);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveTrash(trash: any[]): void {
+  try {
+    localStorage.setItem(CFC_KEY_TRASH, JSON.stringify(trash));
+  } catch {
+    // ignore
+  }
 }

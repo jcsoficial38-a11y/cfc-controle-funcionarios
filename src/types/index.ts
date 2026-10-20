@@ -1,5 +1,12 @@
 export type Gender = 'M' | 'F';
 
+export interface DeletedItem {
+  id: string;
+  type: 'employee';
+  data: any;
+  deletedAt: string;
+}
+
 export interface VacationTakeRecord {
   id: string;
   periodIndex: number; // 0 for 1st period, 1 for 2nd, etc.

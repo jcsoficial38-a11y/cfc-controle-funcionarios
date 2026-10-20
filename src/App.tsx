@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Employee, VacationTakeRecord, ManagerProfile } from './types';
+import { Employee, VacationTakeRecord, ManagerProfile, DeletedItem } from './types';
 import { INITIAL_EMPLOYEES } from './utils/defaultData';
 import {
   calculateVacationSummary,
@@ -41,6 +41,8 @@ import {
   idbGet,
   CFC_KEY_EMPLOYEES,
   CFC_KEY_MANAGER,
+  loadTrash,
+  saveTrash,
 } from './utils/storageService';
 import {
   auth,
@@ -70,6 +72,13 @@ export default function App() {
     const { employees: initialEmployees } = loadEmployeesSync();
     return initialEmployees;
   });
+
+  // Lixeira (registros excluídos)
+  const [trash, setTrash] = useState<DeletedItem[]>(() => loadTrash());
+
+  useEffect(() => {
+    saveTrash(trash);
+  }, [trash]);
 
   // Busca e Filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -412,11 +421,39 @@ export default function App() {
   };
 
   const handleDeleteEmployee = (id: string) => {
+    const emp = employees.find((e) => e.id === id);
+    if (emp) {
+      setTrash((prev) => [
+        ...prev,
+        {
+          id: 'trash-' + Date.now(),
+          type: 'employee',
+          data: emp,
+          deletedAt: new Date().toISOString(),
+        },
+      ]);
+    }
     setEmployees((prev) => prev.filter((e) => e.id !== id));
     if (selectedEmployee?.id === id) {
       setIsDetailModalOpen(false);
       setSelectedEmployee(null);
     }
+  };
+
+  const handleRestoreFromTrash = (trashId: string) => {
+    const item = trash.find((t) => t.id === trashId);
+    if (item && item.type === 'employee') {
+      setEmployees((prev) => [item.data, ...prev]);
+      setTrash((prev) => prev.filter((t) => t.id !== trashId));
+    }
+  };
+
+  const handleDeletePermanently = (trashId: string) => {
+    setTrash((prev) => prev.filter((t) => t.id !== trashId));
+  };
+
+  const handleClearTrash = () => {
+    setTrash([]);
   };
 
   const handleSaveVacationRecord = (employeeId: string, record: VacationTakeRecord) => {
@@ -946,6 +983,10 @@ export default function App() {
         onToggleDarkMode={() => setDarkMode(!darkMode)}
         onUpdateManager={(updated) => setManager(updated)}
         employees={employees}
+        trash={trash}
+        onRestoreFromTrash={handleRestoreFromTrash}
+        onDeletePermanently={handleDeletePermanently}
+        onClearTrash={handleClearTrash}
         onRestoreFromCloud={(cloudEmployees, cloudManager) => {
           if (cloudEmployees && cloudEmployees.length > 0) {
             setEmployees(cloudEmployees);
@@ -954,6 +995,9 @@ export default function App() {
             setManager(cloudManager);
           }
         }}
+        onExportData={handleExportData}
+        onImportData={handleFileChange}
+        onRestoreSafetyBackup={handleRestoreBackup}
       />
 
       {/* Input invisível para restauração de Backup */}
