@@ -44,14 +44,7 @@ import {
   loadTrash,
   saveTrash,
 } from './utils/storageService';
-import {
-  auth,
-  onAuthUserChanged,
-  syncDataToCloud,
-  subscribeToCloudData,
-  fetchDataFromCloud,
-} from './utils/firebase';
-import { User as FirebaseUser } from 'firebase/auth';
+import { CFCAppSidebar } from './components/CFCAppSidebar';
 
 export default function App() {
   // Controle da tela de abertura: false = Tela Inicial Super Limpa, true = Dentro do Aplicativo
@@ -92,6 +85,7 @@ export default function App() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   const [isManagerSettingsOpen, setIsManagerSettingsOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [vacationLaunchState, setVacationLaunchState] = useState<{
     isOpen: boolean;
@@ -191,127 +185,7 @@ export default function App() {
     }
   }, [employees, selectedEmployee]);
 
-  // Monitoramento do estado de login no Firebase e sincronização automática em tempo real
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(() => auth.currentUser);
-  const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
-  const [lastCloudSyncTime, setLastCloudSyncTime] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem('cfc_last_cloud_sync_time');
-    } catch {
-      return null;
-    }
-  });
 
-  // Flag para evitar loops quando a atualização for recebida da nuvem
-  const isIncomingCloudUpdateRef = useRef(false);
-
-  // 1. Observador onAuthStateChanged com persistência local ativa ('indexedDBLocalPersistence')
-  // Reconecta e sincroniza automaticamente sem exigir novos cliques do usuário
-  useEffect(() => {
-    const unsub = onAuthUserChanged(async (user) => {
-      setFirebaseUser(user);
-      if (user) {
-        try {
-          setIsCloudSyncing(true);
-          // Verifica se já existem dados salvos no Firestore deste usuário
-          const cloudData = await fetchDataFromCloud();
-          if (cloudData.employees && cloudData.employees.length > 0) {
-            isIncomingCloudUpdateRef.current = true;
-            setEmployees(cloudData.employees);
-            saveEmployees(cloudData.employees);
-            if (cloudData.manager) {
-              setManager(cloudData.manager);
-              saveManager(cloudData.manager);
-            }
-            const timeStr = cloudData.lastSync
-              ? new Date(cloudData.lastSync).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-              : new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            setLastCloudSyncTime(timeStr);
-            try {
-              localStorage.setItem('cfc_last_cloud_sync_time', timeStr);
-            } catch {
-              // ignore
-            }
-          } else if (employees.length > 0) {
-            // Se o Firestore estiver vazio e houver registros locais, envia imediatamente
-            const res = await syncDataToCloud(employees, manager);
-            if (res.success) {
-              setLastCloudSyncTime(res.timestamp);
-              try {
-                localStorage.setItem('cfc_last_cloud_sync_time', res.timestamp);
-              } catch {
-                // ignore
-              }
-            }
-          }
-        } catch (err) {
-          console.warn('[Firebase AutoSync] Erro na verificação/sincronização inicial:', err);
-        } finally {
-          setIsCloudSyncing(false);
-          setTimeout(() => {
-            isIncomingCloudUpdateRef.current = false;
-          }, 600);
-        }
-      }
-    });
-
-    return () => unsub();
-  }, []);
-
-  // 2. Escuta de atualizações em tempo real (onSnapshot) do Firestore vinculada ao UID do usuário
-  useEffect(() => {
-    if (!firebaseUser) return;
-
-    const unsubscribe = subscribeToCloudData((cloudData) => {
-      if (cloudData.employees && cloudData.employees.length > 0) {
-        isIncomingCloudUpdateRef.current = true;
-        setEmployees(cloudData.employees);
-        saveEmployees(cloudData.employees);
-        if (cloudData.manager) {
-          setManager(cloudData.manager);
-          saveManager(cloudData.manager);
-        }
-        const nowStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        setLastCloudSyncTime(nowStr);
-        try {
-          localStorage.setItem('cfc_last_cloud_sync_time', nowStr);
-        } catch {
-          // ignore
-        }
-        setTimeout(() => {
-          isIncomingCloudUpdateRef.current = false;
-        }, 600);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [firebaseUser]);
-
-  // 3. Sincronização automática em segundo plano para o Firestore quando dados mudam localmente
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    if (firebaseUser && employees.length > 0 && !isIncomingCloudUpdateRef.current) {
-      timeoutId = setTimeout(async () => {
-        try {
-          setIsCloudSyncing(true);
-          const res = await syncDataToCloud(employees, manager);
-          if (res.success) {
-            setLastCloudSyncTime(res.timestamp);
-            try {
-              localStorage.setItem('cfc_last_cloud_sync_time', res.timestamp);
-            } catch {
-              // ignore
-            }
-          }
-        } catch (err) {
-          console.warn('[Firebase AutoSync] Erro na sincronização contínua:', err);
-        } finally {
-          setIsCloudSyncing(false);
-        }
-      }, 1500);
-    }
-    return () => clearTimeout(timeoutId);
-  }, [employees, manager, firebaseUser]);
 
   // Contadores dinâmicos (Cálculo automático de funcionários ativos, demitidos e alertas CLT)
   const counters = useMemo(() => {
@@ -481,12 +355,18 @@ export default function App() {
     );
   };
 
-  // Backup e reset
+  // Backup & Dados Locais
   const handleExportData = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(employees, null, 2));
+    const exportPayload = {
+      manager,
+      employees,
+      trash,
+      exportedAt: new Date().toISOString(),
+    };
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportPayload, null, 2));
     const a = document.createElement('a');
     a.setAttribute('href', dataStr);
-    a.setAttribute('download', `cfc_backup_${new Date().toISOString().slice(0, 10)}.json`);
+    a.setAttribute('download', 'backup_app.json');
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -503,13 +383,23 @@ export default function App() {
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
+        createSafetyBackup(employees);
         if (Array.isArray(json)) {
-          // Cria backup preventivo automático antes de importar
-          createSafetyBackup(employees);
           setEmployees(json);
           alert(`Backup carregado com sucesso! ${json.length} colaboradores restaurados.`);
+        } else if (json && typeof json === 'object') {
+          if (Array.isArray(json.employees)) {
+            setEmployees(json.employees);
+          }
+          if (json.manager && typeof json.manager === 'object') {
+            setManager(json.manager);
+          }
+          if (Array.isArray(json.trash)) {
+            setTrash(json.trash);
+          }
+          alert('Backup completo restaurado com sucesso!');
         } else {
-          alert('Arquivo JSON inválido. Certifique-se de que é um arquivo de backup do CFC.');
+          alert('Arquivo JSON inválido.');
         }
       } catch {
         alert('Erro ao carregar o arquivo JSON.');
@@ -517,6 +407,28 @@ export default function App() {
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleResetTotal = () => {
+    if (
+      confirm(
+        'Deseja realmente apagar todo o armazenamento interno e zerar o aplicativo do começo? Todos os dados serão perdidos permanentemente.'
+      )
+    ) {
+      try {
+        localStorage.clear();
+        if (window.indexedDB) {
+          window.indexedDB.deleteDatabase('cfc_persistent_db');
+        }
+      } catch {
+        // ignore
+      }
+      setEmployees([]);
+      setManager(null);
+      setTrash([]);
+      setIsInApp(false);
+      alert('Aplicativo zerado com sucesso. Reiniciando do começo.');
+    }
   };
 
   const handleResetData = () => {
@@ -552,10 +464,27 @@ export default function App() {
           onUnlock={() => setIsInApp(true)}
           onUpdateManager={(updated) => setManager(updated)}
           onOpenSettings={() => setIsManagerSettingsOpen(true)}
-          isCloudConnected={Boolean(firebaseUser)}
+          isCloudConnected={false}
         />
       ) : (
         <>
+          {/* MENU LATERAL (SIDEBAR) */}
+          <CFCAppSidebar
+            isOpen={isSidebarOpen}
+            onClose={() => setIsSidebarOpen(false)}
+            manager={manager}
+            darkMode={darkMode}
+            onToggleDarkMode={() => setDarkMode(!darkMode)}
+            onLock={() => setIsInApp(false)}
+            onOpenSettings={() => setIsManagerSettingsOpen(true)}
+            currentFilter={statusFilter}
+            onSelectFilter={(f) => setStatusFilter(f)}
+            trashCount={trash.length}
+            onExportData={handleExportData}
+            onImportData={handleImportData}
+            onResetTotal={handleResetTotal}
+          />
+
           {/* CABEÇALHO E LAYOUT PRINCIPAL */}
           <CFCHeader
             manager={manager}
@@ -566,10 +495,7 @@ export default function App() {
               setEmployeeToEdit(null);
               setIsEmployeeModalOpen(true);
             }}
-            onOpenManagerSettings={() => setIsManagerSettingsOpen(true)}
-            isCloudConnected={Boolean(firebaseUser)}
-            isCloudSyncing={isCloudSyncing}
-            lastCloudSyncTime={lastCloudSyncTime}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
           />
 
           {/* Conteúdo Principal da Aplicação */}
@@ -870,20 +796,8 @@ export default function App() {
             <div className="pt-6 border-t border-slate-200/80 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
               <div className="flex items-center gap-2 flex-wrap">
                 <span>CFC &middot; Controle Funcionário Completo</span>
-                {firebaseUser ? (
-                  <>
-                    <span aria-hidden="true" className="mx-1">&middot;</span>
-                    <span className="inline-flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Sincronizado Online (Firestore){lastCloudSyncTime ? ` &bull; ${lastCloudSyncTime}` : ''}</span>
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span aria-hidden="true" className="mx-2">&middot;</span>
-                    <span>Clique sobre qualquer nome para ver a ficha completa</span>
-                  </>
-                )}
+                <span aria-hidden="true" className="mx-2">&middot;</span>
+                <span>Armazenamento 100% Local e Seguro &middot; Clique sobre qualquer nome para ver a ficha</span>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
@@ -987,17 +901,10 @@ export default function App() {
         onRestoreFromTrash={handleRestoreFromTrash}
         onDeletePermanently={handleDeletePermanently}
         onClearTrash={handleClearTrash}
-        onRestoreFromCloud={(cloudEmployees, cloudManager) => {
-          if (cloudEmployees && cloudEmployees.length > 0) {
-            setEmployees(cloudEmployees);
-          }
-          if (cloudManager) {
-            setManager(cloudManager);
-          }
-        }}
         onExportData={handleExportData}
-        onImportData={handleFileChange}
+        onImportData={() => fileInputRef.current?.click()}
         onRestoreSafetyBackup={handleRestoreBackup}
+        onResetTotal={handleResetTotal}
       />
 
       {/* Input invisível para restauração de Backup */}
