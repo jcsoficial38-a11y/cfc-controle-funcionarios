@@ -324,3 +324,16 @@ export function playSecurityAudio(success: boolean) {
     // Silently continue
   }
 }
+
+/**
+ * Verifica se há proteção de segurança cadastrada (PIN de 4 dígitos ou Biometria ativa).
+ * Se o usuário não tiver configurado nenhum PIN nem biometria, o aplicativo inicia livre e direto.
+ */
+export function hasSecurityProtection(
+  manager: { pin?: string; senha?: string; biometriaAtiva?: boolean; biometriaCadastrada?: boolean } | null | undefined
+): boolean {
+  if (!manager) return false;
+  const hasPin = Boolean(manager.pin && manager.pin.trim().length === 4);
+  const hasBiometria = Boolean(manager.biometriaAtiva && manager.biometriaCadastrada);
+  return hasPin || hasBiometria;
+}

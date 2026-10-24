@@ -29,6 +29,7 @@ interface CFCAppSidebarProps {
   currentFilter: string;
   onSelectFilter: (filter: 'todos' | 'ativos' | 'demitidos' | 'alerta' | 'vencidas') => void;
   trashCount: number;
+  onSaveData?: () => void;
   onExportData: () => void;
   onImportData: () => void;
   onResetTotal: () => void;
@@ -45,6 +46,7 @@ export const CFCAppSidebar: React.FC<CFCAppSidebarProps> = ({
   currentFilter,
   onSelectFilter,
   trashCount,
+  onSaveData,
   onExportData,
   onImportData,
   onResetTotal,
@@ -187,6 +189,22 @@ export const CFCAppSidebar: React.FC<CFCAppSidebarProps> = ({
           <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 mb-1">
             Backup & Dados Locais
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              if (onSaveData) onSaveData();
+              else onExportData();
+            }}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 transition-all cursor-pointer shadow-xs"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-base">💾</span>
+              <span>Salvar Dados Agora (.json)</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+          </button>
 
           <button
             type="button"

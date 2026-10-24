@@ -1,16 +1,17 @@
 import { Employee, ManagerProfile } from '../types';
 
 export const INITIAL_MANAGER: ManagerProfile = {
-  nome: 'Dr. Roberto Silveira',
+  nome: 'Gestor de RH',
   usuario: 'admin',
-  senha: '123',
-  cargo: 'Diretor de Gente & Gestão',
+  cargo: 'Gestor de Pessoal / RH',
   biometriaAtiva: false,
   biometriaCadastrada: false,
   tipoBiometria: 'touch_id',
 };
 
-export const INITIAL_EMPLOYEES: Employee[] = [
+export const INITIAL_EMPLOYEES: Employee[] = [];
+
+export const DEMO_SAMPLE_EMPLOYEES: Employee[] = [
   {
     id: 'emp-1',
     nome: 'Carlos Eduardo Moreira',

@@ -9,12 +9,14 @@ interface CFCHeaderProps {
   onLock: () => void;
   onOpenNewEmployee: () => void;
   onOpenSidebar: () => void;
+  onSaveData: () => void;
 }
 
 export const CFCHeader: React.FC<CFCHeaderProps> = ({
   manager,
   onOpenNewEmployee,
   onOpenSidebar,
+  onSaveData,
 }) => {
   const getAccentBtn = () => {
     switch (manager?.accentColor) {
@@ -61,14 +63,26 @@ export const CFCHeader: React.FC<CFCHeaderProps> = ({
           </div>
         </div>
 
-        {/* Direita: Apenas botão de Adicionar Funcionário (Sem avatares duplicados) */}
+        {/* Direita: Botão de Salvar Dados e Adicionar Funcionário */}
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onSaveData}
+            title="Salvar dados agora e baixar arquivo de backup inteligente"
+            aria-label="Salvar Dados"
+            className="h-9 px-2.5 sm:px-3.5 rounded-xl border border-emerald-300 dark:border-emerald-700/80 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold transition-all active:scale-95 cursor-pointer whitespace-nowrap shrink-0 shadow-xs"
+          >
+            <span className="text-sm">💾</span>
+            <span className="hidden sm:inline">Salvar Dados</span>
+            <span className="inline sm:hidden">Salvar</span>
+          </button>
+
           <button
             type="button"
             onClick={onOpenNewEmployee}
             title="Cadastrar Novo Funcionário"
             aria-label="Cadastrar Novo Funcionário"
-            className={`h-9 px-3.5 sm:px-4 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold text-white ${getAccentBtn()} shadow-xs transition-transform active:scale-95 cursor-pointer whitespace-nowrap shrink-0`}
+            className={`h-9 px-3 sm:px-4 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold text-white ${getAccentBtn()} shadow-xs transition-transform active:scale-95 cursor-pointer whitespace-nowrap shrink-0`}
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span className="hidden sm:inline">Adicionar Funcionário</span>

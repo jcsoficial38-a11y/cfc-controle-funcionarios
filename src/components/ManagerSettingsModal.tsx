@@ -245,10 +245,10 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
 
     const updated: ManagerProfile = {
       ...(manager || {
-        senha: pin || '1234',
-        pin: pin || '1234',
+        senha: pin || undefined,
+        pin: pin || undefined,
         perguntaSeguranca: selectedQuestion,
-        respostaSeguranca: respostaSeguranca || 'padrao',
+        respostaSeguranca: respostaSeguranca || undefined,
         biometriaAtiva: false,
         tipoBiometria: 'touch_id',
         cargo: 'Gestor RH',

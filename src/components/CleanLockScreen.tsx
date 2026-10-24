@@ -16,6 +16,7 @@ import {
   authenticateWithBiometrics,
   playSecurityAudio,
   hasBiometricPasskeyCreated,
+  hasSecurityProtection,
 } from '../utils/security';
 
 interface CleanLockScreenProps {
@@ -37,6 +38,13 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Se não houver PIN ou biometria cadastrada no LocalStorage, pula a tela de bloqueio de imediato
+  useEffect(() => {
+    if (!hasSecurityProtection(manager)) {
+      onUnlock();
+    }
+  }, [manager, onUnlock]);
+
   // Estados do fluxo "Esqueci minha senha"
   const [isForgotOpen, setIsForgotOpen] = useState(false);
   const [recoveryMethod, setRecoveryMethod] = useState<'options' | 'question' | 'reset_pin'>('options');
@@ -44,7 +52,7 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
   const [newPin, setNewPin] = useState('');
   const [confirmNewPin, setConfirmNewPin] = useState('');
 
-  const targetPin = manager?.pin || manager?.senha || '1234';
+  const targetPin = manager?.pin || manager?.senha || '';
   const isFaceId = manager?.tipoBiometria === 'face_id';
   const securityQuestion = manager?.perguntaSeguranca || 'Qual o nome da sua primeira escola?';
   const securityAnswer = (manager?.respostaSeguranca || '').trim().toLowerCase();
@@ -72,7 +80,7 @@ export const CleanLockScreen: React.FC<CleanLockScreenProps> = ({
   };
 
   const validatePin = (codeToTest: string) => {
-    if (codeToTest === targetPin || codeToTest === '1234') {
+    if (targetPin && codeToTest === targetPin) {
       playSecurityAudio(true);
       setSuccessMessage('Acesso autorizado!');
       setTimeout(() => {

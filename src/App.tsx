@@ -45,15 +45,40 @@ import {
   saveTrash,
 } from './utils/storageService';
 import { CFCAppSidebar } from './components/CFCAppSidebar';
+import { hasSecurityProtection } from './utils/security';
 
 export default function App() {
-  // Controle da tela de abertura: false = Tela Inicial Super Limpa, true = Dentro do Aplicativo
-  const [isInApp, setIsInApp] = useState<boolean>(false);
-
   // Perfil do Gestor (persistido com migração universal e IndexedDB)
   const [manager, setManager] = useState<ManagerProfile | null>(() => {
     return loadManagerSync();
   });
+
+  // Controle da tela de abertura: se não há PIN/biometria cadastrada, entra livre e direto no aplicativo
+  const [isInApp, setIsInApp] = useState<boolean>(() => {
+    const initialManager = loadManagerSync();
+    return !hasSecurityProtection(initialManager);
+  });
+
+  // Notificações Toast sutis
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<number | null>(null);
+
+  const showToast = (message: string) => {
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    setToastMessage(message);
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToastMessage(null);
+    }, 3500);
+  };
+
+  // Se nenhuma senha/PIN ou biometria estiver configurada, garante que a tela principal fique sempre aberta
+  useEffect(() => {
+    if (!hasSecurityProtection(manager)) {
+      setIsInApp(true);
+    }
+  }, [manager]);
 
   // Modo claro / escuro
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -355,21 +380,44 @@ export default function App() {
     );
   };
 
-  // Backup & Dados Locais
-  const handleExportData = () => {
+  // Salvamento Rápido Inteligente com Data Atual no Nome (backup_cfc_YYYY-MM-DD.json)
+  const handleQuickSaveData = () => {
+    saveEmployees(employees);
+    if (manager) saveManager(manager);
+    saveTrash(trash);
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const fileName = `backup_cfc_${year}-${month}-${day}.json`;
+
     const exportPayload = {
+      app: 'Controle Funcionário Completo (CFC)',
+      versao: '1.0',
+      exportedAt: now.toISOString(),
       manager,
       employees,
       trash,
-      exportedAt: new Date().toISOString(),
     };
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportPayload, null, 2));
+
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.setAttribute('href', dataStr);
-    a.setAttribute('download', 'backup_app.json');
+    a.href = url;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
-    a.remove();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('Dados salvos com sucesso no seu celular!');
+  };
+
+  const handleExportData = () => {
+    handleQuickSaveData();
   };
 
   const handleImportData = () => {
@@ -386,7 +434,7 @@ export default function App() {
         createSafetyBackup(employees);
         if (Array.isArray(json)) {
           setEmployees(json);
-          alert(`Backup carregado com sucesso! ${json.length} colaboradores restaurados.`);
+          showToast(`Backup carregado! ${json.length} colaboradores restaurados.`);
         } else if (json && typeof json === 'object') {
           if (Array.isArray(json.employees)) {
             setEmployees(json.employees);
@@ -397,7 +445,7 @@ export default function App() {
           if (Array.isArray(json.trash)) {
             setTrash(json.trash);
           }
-          alert('Backup completo restaurado com sucesso!');
+          showToast('Backup completo restaurado com sucesso!');
         } else {
           alert('Arquivo JSON inválido.');
         }
@@ -407,6 +455,17 @@ export default function App() {
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleLockApp = () => {
+    if (!hasSecurityProtection(manager)) {
+      alert(
+        'Nenhum PIN ou biometria cadastrada.\n\nPara ativar o bloqueio de tela, acesse as Configurações e cadastre um PIN de 4 dígitos ou biometria.'
+      );
+      setIsManagerSettingsOpen(true);
+      return;
+    }
+    setIsInApp(false);
   };
 
   const handleResetTotal = () => {
@@ -426,20 +485,8 @@ export default function App() {
       setEmployees([]);
       setManager(null);
       setTrash([]);
-      setIsInApp(false);
-      alert('Aplicativo zerado com sucesso. Reiniciando do começo.');
-    }
-  };
-
-  const handleResetData = () => {
-    if (
-      confirm(
-        'Deseja carregar a lista de exemplo?\n\nSeus dados atuais serão salvos em um backup de segurança e poderão ser restaurados a qualquer momento.'
-      )
-    ) {
-      createSafetyBackup(employees);
-      setEmployees(INITIAL_EMPLOYEES);
-      alert('Dados de exemplo carregados. Seus dados anteriores foram guardados em backup de segurança.');
+      setIsInApp(true);
+      showToast('Aplicativo zerado com sucesso. Estado 100% limpo!');
     }
   };
 
@@ -448,7 +495,7 @@ export default function App() {
     if (backup && Array.isArray(backup) && backup.length > 0) {
       if (confirm(`Restaurar o backup de segurança anterior com ${backup.length} colaborador(es)?`)) {
         setEmployees(backup);
-        alert('Backup restaurado com sucesso! Seus colaboradores estão de volta.');
+        showToast('Backup restaurado com sucesso!');
       }
     } else {
       alert('Nenhum backup recente de segurança encontrado neste dispositivo.');
@@ -457,8 +504,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
-      {/* TELA DE BLOQUEIO E AUTENTICAÇÃO OBRIGATÓRIA (PIN de 4 dígitos ou Biometria / Face ID) */}
-      {!isInApp ? (
+      {/* TELA DE BLOQUEIO E AUTENTICAÇÃO (PIN de 4 dígitos ou Biometria / Face ID - apenas quando cadastrado) */}
+      {!isInApp && hasSecurityProtection(manager) ? (
         <CleanLockScreen
           manager={manager}
           onUnlock={() => setIsInApp(true)}
@@ -475,11 +522,12 @@ export default function App() {
             manager={manager}
             darkMode={darkMode}
             onToggleDarkMode={() => setDarkMode(!darkMode)}
-            onLock={() => setIsInApp(false)}
+            onLock={handleLockApp}
             onOpenSettings={() => setIsManagerSettingsOpen(true)}
             currentFilter={statusFilter}
             onSelectFilter={(f) => setStatusFilter(f)}
             trashCount={trash.length}
+            onSaveData={handleQuickSaveData}
             onExportData={handleExportData}
             onImportData={handleImportData}
             onResetTotal={handleResetTotal}
@@ -490,12 +538,13 @@ export default function App() {
             manager={manager}
             darkMode={darkMode}
             onToggleDarkMode={() => setDarkMode(!darkMode)}
-            onLock={() => setIsInApp(false)}
+            onLock={handleLockApp}
             onOpenNewEmployee={() => {
               setEmployeeToEdit(null);
               setIsEmployeeModalOpen(true);
             }}
             onOpenSidebar={() => setIsSidebarOpen(true)}
+            onSaveData={handleQuickSaveData}
           />
 
           {/* Conteúdo Principal da Aplicação */}
@@ -741,6 +790,8 @@ export default function App() {
                 <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">
                   {searchTerm.trim()
                     ? 'Nenhum funcionário encontrado'
+                    : employees.length === 0
+                    ? 'Nenhum funcionário cadastrado'
                     : statusFilter === 'vencidas'
                     ? 'Nenhum funcionário com férias vencidas'
                     : statusFilter === 'alerta'
@@ -750,6 +801,8 @@ export default function App() {
                 <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
                   {searchTerm.trim()
                     ? `Nenhum resultado correspondente a "${searchTerm}". Tente outro nome, apelido, cargo ou WhatsApp.`
+                    : employees.length === 0
+                    ? 'O aplicativo está zerado e pronto para uso. Cadastre o primeiro colaborador da sua equipe no botão abaixo.'
                     : statusFilter === 'vencidas'
                     ? 'Excelente! Não há períodos aquisitivos com prazo limite ultrapassado e saldo pendente de gozo.'
                     : statusFilter === 'alerta'
@@ -757,6 +810,18 @@ export default function App() {
                     : 'Não há funcionários cadastrados nesta categoria.'}
                 </p>
                 <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+                  {employees.length === 0 && !searchTerm.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmployeeToEdit(null);
+                        setIsEmployeeModalOpen(true);
+                      }}
+                      className="px-4 py-2.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all shadow-xs cursor-pointer"
+                    >
+                      + Cadastrar Primeiro Funcionário
+                    </button>
+                  )}
                   {searchTerm && (
                     <button
                       type="button"
@@ -828,12 +893,12 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleResetData}
-                  title="Carrega colaboradores de teste (seus dados reais ficam salvos em backup automático)"
-                  className="hover:text-slate-700 dark:hover:text-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
+                  onClick={handleResetTotal}
+                  title="Apaga os dados e zera o aplicativo do começo"
+                  className="hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Carregar Exemplos</span>
+                  <span>Reset Total</span>
                 </button>
               </div>
             </div>
@@ -915,6 +980,14 @@ export default function App() {
         accept=".json"
         className="hidden"
       />
+
+      {/* Toast Notification para Salvamento Rápido e Ações de Backup */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-emerald-600 text-white font-medium text-xs sm:text-sm shadow-xl shadow-emerald-950/20 border border-emerald-400/30 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <span className="text-base">💾</span>
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }
