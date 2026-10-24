@@ -15,101 +15,93 @@ export async function registerBiometricPasskey(
   userName: string = 'Gestor CFC',
   userDisplayName: string = 'Gestor Responsável'
 ): Promise<{ success: boolean; credentialId?: string; error?: string }> {
-  // Salva registro local como garantia imediata
-  const fallbackId = `cfc-key-${Date.now()}`;
-
+  // 1. Verifica se a API WebAuthn está presente no navegador/dispositivo
   if (
-    typeof window !== 'undefined' &&
-    window.PublicKeyCredential &&
-    typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function'
+    typeof window === 'undefined' ||
+    !window.PublicKeyCredential ||
+    !navigator.credentials ||
+    !navigator.credentials.create
   ) {
-    try {
-      const isAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      if (isAvailable && navigator.credentials && navigator.credentials.create) {
-        const challenge = new Uint8Array(32);
-        window.crypto.getRandomValues(challenge);
-
-        const userId = new Uint8Array(16);
-        window.crypto.getRandomValues(userId);
-
-        // Determina o domínio do Relying Party (ex: cfc-controle-funcionarios.vercel.app)
-        let rpId: string | undefined = undefined;
-        if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-          rpId = window.location.hostname;
-        }
-
-        const createOptions: CredentialCreationOptions = {
-          publicKey: {
-            challenge,
-            rp: {
-              name: 'Controle Funcionário Completo (CFC)',
-              id: rpId,
-            },
-            user: {
-              id: userId,
-              name: userName,
-              displayName: userDisplayName,
-            },
-            pubKeyCredParams: [
-              { type: 'public-key', alg: -7 }, // ES256
-              { type: 'public-key', alg: -257 }, // RS256
-            ],
-            authenticatorSelection: {
-              authenticatorAttachment: 'platform', // TouchID, FaceID, Windows Hello, Android Biometrics
-              userVerification: 'required',
-              requireResidentKey: false,
-              residentKey: 'preferred',
-            },
-            timeout: 60000,
-            attestation: 'none',
-          },
-        };
-
-        try {
-          const credential = (await navigator.credentials.create(createOptions)) as PublicKeyCredential | null;
-          if (credential && credential.id) {
-            try {
-              localStorage.setItem(STORAGE_KEY_PASSKEY_ID, credential.id);
-            } catch {
-              // ignore
-            }
-            return { success: true, credentialId: credential.id };
-          }
-        } catch (err: unknown) {
-          // Se o usuário cancelar ou se o iframe do ambiente restringir permissions policy:
-          const errMsg = err instanceof Error ? err.message : String(err);
-          // Se for cancelamento explícito pelo usuário
-          if (err instanceof Error && (err.name === 'NotAllowedError' || err.name === 'AbortError')) {
-            return { success: false, error: 'Cadastro de biometria cancelado pelo usuário.' };
-          }
-          // Caso a política de permissão do iframe bloqueie WebAuthn nativo,
-          // registramos o consentimento biométrico com sucesso no storage do app
-          try {
-            localStorage.setItem(STORAGE_KEY_PASSKEY_ID, fallbackId);
-          } catch {
-            // ignore
-          }
-          return { success: true, credentialId: fallbackId };
-        }
-      }
-    } catch {
-      // Ignora erro geral
-    }
+    return {
+      success: false,
+      error: 'Não foi possível validar a biometria. Tente novamente.',
+    };
   }
 
-  // Fallback gracioso para navegadores ou ambientes sem WebAuthn completo
   try {
-    localStorage.setItem(STORAGE_KEY_PASSKEY_ID, fallbackId);
-  } catch {
-    // ignore
+    // Desafio de 32 bytes gerado com criptografia nativa
+    const challenge = new Uint8Array(32);
+    window.crypto.getRandomValues(challenge);
+
+    // ID de usuário exclusivo de 16 bytes
+    const userId = new Uint8Array(16);
+    window.crypto.getRandomValues(userId);
+
+    // Domínio do Relying Party
+    const hostname = window.location.hostname;
+    const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+    const rp: { name: string; id?: string } = {
+      name: 'Controle Funcionário Completo (CFC)',
+    };
+    if (hostname && !isIp && hostname !== 'localhost') {
+      rp.id = hostname;
+    }
+
+    const createOptions: CredentialCreationOptions = {
+      publicKey: {
+        challenge,
+        rp,
+        user: {
+          id: userId,
+          name: userName || 'gestor@cfc',
+          displayName: userDisplayName || 'Gestor Responsável',
+        },
+        pubKeyCredParams: [
+          { type: 'public-key', alg: -7 }, // ES256 (Padrão Android Biometrics e iOS)
+          { type: 'public-key', alg: -257 }, // RS256
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform', // Aciona o leitor biométrico nativo da plataforma (Android/Chrome BiometricPrompt)
+          userVerification: 'required', // Obriga a verificação com o dedo no sensor
+          residentKey: 'preferred',
+        },
+        timeout: 60000,
+        attestation: 'none',
+      },
+    };
+
+    // Chama diretamente a API nativa que abre o leitor de digital na tela do Android
+    const credential = (await navigator.credentials.create(createOptions)) as PublicKeyCredential | null;
+
+    if (credential && credential.id) {
+      try {
+        localStorage.setItem(STORAGE_KEY_PASSKEY_ID, credential.id);
+        localStorage.setItem('biometria_ativa', 'true');
+      } catch {
+        // ignore
+      }
+      return { success: true, credentialId: credential.id };
+    }
+
+    return {
+      success: false,
+      error: 'Não foi possível validar a biometria. Tente novamente.',
+    };
+  } catch (err: unknown) {
+    console.warn('[CFC WebAuthn Registration Error]', err);
+    // Erro amigável sem travar o aplicativo
+    return {
+      success: false,
+      error: 'Não foi possível validar a biometria. Tente novamente.',
+    };
   }
-  return { success: true, credentialId: fallbackId };
 }
 
 export function hasBiometricPasskeyCreated(credentialId?: string): boolean {
   if (credentialId && credentialId.trim().length > 0) return true;
   try {
     if (typeof localStorage !== 'undefined') {
+      if (localStorage.getItem('biometria_ativa') === 'true') return true;
       const stored = localStorage.getItem(STORAGE_KEY_PASSKEY_ID);
       return Boolean(stored && stored.trim().length > 0);
     }
@@ -288,6 +280,7 @@ export async function authenticateWithBiometrics(
 export function clearBiometricPasskey(): void {
   try {
     localStorage.removeItem(STORAGE_KEY_PASSKEY_ID);
+    localStorage.setItem('biometria_ativa', 'false');
   } catch {
     // ignore
   }
@@ -332,6 +325,9 @@ export function playSecurityAudio(success: boolean) {
 export function hasSecurityProtection(
   manager: { pin?: string; senha?: string; biometriaAtiva?: boolean; biometriaCadastrada?: boolean } | null | undefined
 ): boolean {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('biometria_ativa') === 'true') {
+    return true;
+  }
   if (!manager) return false;
   const hasPin = Boolean(manager.pin && manager.pin.trim().length === 4);
   const hasBiometria = Boolean(manager.biometriaAtiva && manager.biometriaCadastrada);

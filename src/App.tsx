@@ -970,6 +970,7 @@ export default function App() {
         onImportData={() => fileInputRef.current?.click()}
         onRestoreSafetyBackup={handleRestoreBackup}
         onResetTotal={handleResetTotal}
+        onShowToast={showToast}
       />
 
       {/* Input invisível para restauração de Backup */}

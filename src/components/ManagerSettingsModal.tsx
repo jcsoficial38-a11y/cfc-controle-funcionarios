@@ -46,6 +46,7 @@ interface ManagerSettingsModalProps {
   onImportData?: () => void;
   onRestoreSafetyBackup?: () => void;
   onResetTotal?: () => void;
+  onShowToast?: (msg: string) => void;
 }
 
 const PRESET_SECURITY_QUESTIONS = [
@@ -74,6 +75,7 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
   onImportData,
   onRestoreSafetyBackup,
   onResetTotal,
+  onShowToast,
 }) => {
   // Estados do Perfil
   const [nome, setNome] = useState(manager?.nome || '');
@@ -184,6 +186,7 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
   const handleCadastrarBiometria = async () => {
     setIsRegisteringBiometric(true);
     setBiometricFeedback(null);
+    setFeedback(null);
     try {
       const result = await registerBiometricPasskey(
         usuario || 'gestor',
@@ -194,24 +197,39 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
       if (result.success) {
         setBiometriaCadastrada(true);
         setBiometriaAtiva(true);
-        setBiometricFeedback('Biometria cadastrada e ativada com sucesso!');
-
-        if (manager) {
-          const updatedManager: ManagerProfile = {
-            ...manager,
-            biometriaAtiva: true,
-            biometriaCadastrada: true,
-            credencialBiometricaId: result.credentialId,
-            tipoBiometria,
-          };
-          onUpdateManager(updatedManager);
+        try {
+          localStorage.setItem('biometria_ativa', 'true');
+        } catch {
+          // ignore
         }
+
+        const updatedManager: ManagerProfile = {
+          ...(manager || {
+            nome: nome || 'Gestor',
+            usuario: usuario || 'admin',
+            cargo: cargo || 'Gestor RH',
+          }),
+          biometriaAtiva: true,
+          biometriaCadastrada: true,
+          credencialBiometricaId: result.credentialId,
+          tipoBiometria,
+        };
+        onUpdateManager(updatedManager);
+
+        const successMsg = 'Biometria cadastrada e salva com sucesso!';
+        setBiometricFeedback(successMsg);
+        setFeedback({ tipo: 'sucesso', texto: successMsg });
+        onShowToast?.(successMsg);
       } else {
-        setBiometricFeedback(result.error || 'Não foi possível cadastrar a biometria.');
+        const errorMsg = 'Não foi possível validar a biometria. Tente novamente.';
+        setBiometricFeedback(errorMsg);
+        setFeedback({ tipo: 'erro', texto: errorMsg });
       }
     } catch {
       setIsRegisteringBiometric(false);
-      setBiometricFeedback('Erro ao comunicar com o sensor biométrico.');
+      const errorMsg = 'Não foi possível validar a biometria. Tente novamente.';
+      setBiometricFeedback(errorMsg);
+      setFeedback({ tipo: 'erro', texto: errorMsg });
     }
   };
 
@@ -219,6 +237,11 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
     setBiometriaAtiva(false);
     clearBiometricPasskey();
     setBiometriaCadastrada(false);
+    try {
+      localStorage.setItem('biometria_ativa', 'false');
+    } catch {
+      // ignore
+    }
     setBiometricFeedback('Biometria desativada.');
     if (manager) {
       const updatedManager: ManagerProfile = {
@@ -229,6 +252,7 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
       };
       onUpdateManager(updatedManager);
     }
+    onShowToast?.('Biometria desativada com sucesso.');
   };
 
 
@@ -270,13 +294,17 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
     const cleanPin = pin.trim();
     const cleanConfirm = confirmPin.trim();
 
-    if (!cleanPin || !/^\d{4}$/.test(cleanPin)) {
-      setFeedback({ tipo: 'erro', texto: 'O PIN deve conter exatamente 4 dígitos numéricos (ex: 1234).' });
-      return;
-    }
-
-    if (cleanPin !== cleanConfirm) {
-      setFeedback({ tipo: 'erro', texto: 'A confirmação do PIN não confere com o PIN digitado.' });
+    if (cleanPin) {
+      if (!/^\d{4}$/.test(cleanPin)) {
+        setFeedback({ tipo: 'erro', texto: 'O PIN deve conter exatamente 4 dígitos numéricos (ex: 1234).' });
+        return;
+      }
+      if (cleanPin !== cleanConfirm) {
+        setFeedback({ tipo: 'erro', texto: 'A confirmação do PIN não confere com o PIN digitado.' });
+        return;
+      }
+    } else if (!biometriaAtiva && !manager?.pin) {
+      setFeedback({ tipo: 'erro', texto: 'Cadastre um PIN de 4 dígitos ou ative a Biometria para proteger o aplicativo.' });
       return;
     }
 
@@ -285,24 +313,35 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
         ? customQuestion.trim()
         : selectedQuestion.trim();
 
+    try {
+      localStorage.setItem('biometria_ativa', biometriaAtiva ? 'true' : 'false');
+    } catch {
+      // ignore
+    }
+
     const updated: ManagerProfile = {
       ...(manager || {
         nome: nome || 'Gestor',
         usuario: usuario || 'admin',
         cargo: cargo || 'Gestor RH',
       }),
-      senha: cleanPin,
-      pin: cleanPin,
+      senha: cleanPin || manager?.senha || manager?.pin,
+      pin: cleanPin || manager?.pin,
       perguntaSeguranca: finalQuestion || manager?.perguntaSeguranca || PRESET_SECURITY_QUESTIONS[0],
       respostaSeguranca: respostaSeguranca.trim() || manager?.respostaSeguranca || 'padrao',
       biometriaAtiva,
-      biometriaCadastrada,
+      biometriaCadastrada: biometriaAtiva,
       credencialBiometricaId: manager?.credencialBiometricaId,
       tipoBiometria,
     };
 
     onUpdateManager(updated);
-    setFeedback({ tipo: 'sucesso', texto: 'Configurações de segurança e PIN salvas com sucesso!' });
+
+    const msg = biometriaAtiva
+      ? 'Biometria cadastrada e salva com sucesso!'
+      : 'Configurações de segurança salvas com sucesso!';
+    setFeedback({ tipo: 'sucesso', texto: msg });
+    onShowToast?.(msg);
   };
 
   // Submit Geral
@@ -642,31 +681,35 @@ export const ManagerSettingsModal: React.FC<ManagerSettingsModalProps> = ({
                         Uso do sensor nativo do dispositivo
                       </span>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${biometriaCadastrada && biometriaAtiva ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'}`}>
-                      {biometriaCadastrada && biometriaAtiva ? 'Ativa' : 'Desativada'}
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${
+                      biometriaAtiva
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                    }`}>
+                      {biometriaAtiva ? 'Ativada' : 'Desativada'}
                     </span>
                   </div>
 
-                  {!biometriaCadastrada || !biometriaAtiva ? (
+                  {!biometriaAtiva ? (
                     <button
                       type="button"
                       onClick={handleCadastrarBiometria}
                       disabled={isRegisteringBiometric}
-                      className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      className="w-full py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-transform active:scale-95 cursor-pointer disabled:opacity-50"
                     >
                       <Fingerprint className="w-4 h-4" />
-                      <span>{isRegisteringBiometric ? 'Cadastrando...' : 'Cadastrar Biometria'}</span>
+                      <span>{isRegisteringBiometric ? 'Aguardando Leitor de Digital...' : 'Cadastrar Biometria'}</span>
                     </button>
                   ) : (
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-300">
-                        <span className="flex items-center gap-1 font-medium">
-                          <Check className="w-3.5 h-3.5" /> Biometria ativa
+                      <div className="flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                        <span className="flex items-center gap-1.5 font-semibold">
+                          <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> Biometria Ativada e Salva
                         </span>
                         <button
                           type="button"
                           onClick={handleDesativarBiometria}
-                          className="text-[11px] text-rose-600 hover:underline font-semibold cursor-pointer"
+                          className="text-[11px] text-rose-600 dark:text-rose-400 hover:underline font-bold cursor-pointer"
                         >
                           Desativar
                         </button>

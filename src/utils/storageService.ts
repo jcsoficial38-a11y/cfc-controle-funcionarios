@@ -306,7 +306,13 @@ export function loadManagerSync(): ManagerProfile | null {
     const raw = localStorage.getItem(CFC_KEY_MANAGER);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') return parsed;
+      if (parsed && typeof parsed === 'object') {
+        if (localStorage.getItem('biometria_ativa') === 'true') {
+          parsed.biometriaAtiva = true;
+          parsed.biometriaCadastrada = true;
+        }
+        return parsed;
+      }
     }
   } catch {
     // ignore
@@ -319,6 +325,10 @@ export function loadManagerSync(): ManagerProfile | null {
       if (legacyRaw) {
         const parsed = JSON.parse(legacyRaw);
         if (parsed && typeof parsed === 'object') {
+          if (localStorage.getItem('biometria_ativa') === 'true') {
+            parsed.biometriaAtiva = true;
+            parsed.biometriaCadastrada = true;
+          }
           localStorage.setItem(CFC_KEY_MANAGER, JSON.stringify(parsed));
           idbSet(CFC_KEY_MANAGER, parsed);
           return parsed;
@@ -335,6 +345,10 @@ export function loadManagerSync(): ManagerProfile | null {
     if (backupRaw) {
       const parsed = JSON.parse(backupRaw);
       if (parsed && typeof parsed === 'object') {
+        if (localStorage.getItem('biometria_ativa') === 'true') {
+          parsed.biometriaAtiva = true;
+          parsed.biometriaCadastrada = true;
+        }
         localStorage.setItem(CFC_KEY_MANAGER, JSON.stringify(parsed));
         return parsed;
       }
@@ -361,6 +375,12 @@ export function saveManager(manager: ManagerProfile | null): void {
     if (current) {
       localStorage.setItem(CFC_KEY_BACKUP_MANAGER, current);
       idbSet(CFC_KEY_BACKUP_MANAGER, current);
+    }
+
+    if (manager.biometriaAtiva) {
+      localStorage.setItem('biometria_ativa', 'true');
+    } else {
+      localStorage.setItem('biometria_ativa', 'false');
     }
 
     const serialized = JSON.stringify(manager);
