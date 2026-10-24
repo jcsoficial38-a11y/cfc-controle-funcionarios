@@ -802,45 +802,35 @@ export default function App() {
                   {searchTerm.trim()
                     ? `Nenhum resultado correspondente a "${searchTerm}". Tente outro nome, apelido, cargo ou WhatsApp.`
                     : employees.length === 0
-                    ? 'O aplicativo está zerado e pronto para uso. Cadastre o primeiro colaborador da sua equipe no botão abaixo.'
+                    ? "O aplicativo está zerado e pronto para uso. Utilize o botão '+ Novo' no topo para cadastrar."
                     : statusFilter === 'vencidas'
                     ? 'Excelente! Não há períodos aquisitivos com prazo limite ultrapassado e saldo pendente de gozo.'
                     : statusFilter === 'alerta'
                     ? 'Tudo em dia! Não há colaboradores no prazo crítico dos últimos 60 dias do período concessivo.'
                     : 'Não há funcionários cadastrados nesta categoria.'}
                 </p>
-                <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
-                  {employees.length === 0 && !searchTerm.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEmployeeToEdit(null);
-                        setIsEmployeeModalOpen(true);
-                      }}
-                      className="px-4 py-2.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all shadow-xs cursor-pointer"
-                    >
-                      + Cadastrar Primeiro Funcionário
-                    </button>
-                  )}
-                  {searchTerm && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchTerm('')}
-                      className="px-4 py-2 text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl transition-colors cursor-pointer"
-                    >
-                      Limpar Pesquisa
-                    </button>
-                  )}
-                  {statusFilter !== 'todos' && (
-                    <button
-                      type="button"
-                      onClick={() => setStatusFilter('todos')}
-                      className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-colors cursor-pointer"
-                    >
-                      Ver Todos os Funcionários
-                    </button>
-                  )}
-                </div>
+                {(searchTerm || statusFilter !== 'todos') && (
+                  <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+                    {searchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchTerm('')}
+                        className="px-4 py-2 text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Limpar Pesquisa
+                      </button>
+                    )}
+                    {statusFilter !== 'todos' && (
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter('todos')}
+                        className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Ver Todos os Funcionários
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <CleanEmployeeList
